@@ -368,8 +368,8 @@ void start_listen(struct IO3705 *iob, int abport) {
 
    int flag = 1;
 
-   if ((iob->CA_socket[abport] = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0)) == 0) {
-      printf("\nCA%c: Socket failed for channel %c", abswid[abport]);
+   if ((iob->CA_socket[abport] = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0)) == -1) {
+      printf("\nCA%c: Endpoint creation for channel %c failed with error %s ",iob->CA_id, abswid[abport], strerror(errno));
       exit(EXIT_FAILURE);
    }
 
@@ -430,7 +430,8 @@ void *CA_ATTN_thread(void *pthrargs) {
             iob = iob1;
          else
             iob = iob2;
-         printf("CA%c: L3 register 55 %04X \n\r", iob->CA_id, Eregs_Out[0x55]);
+         if (debug_reg & 0x80)
+            printf("CA%c: L3 register 55 %04X \n\r", iob->CA_id, Eregs_Out[0x55]);
          Eregs_Inp[0x55] |= 0x0200;              // Set Program Requested Attention
          pthread_mutex_lock(&r77_lock);
          Eregs_Inp[0x77] |= iob->CA_mask;        // Set CA1 L3 Interrupt Request
@@ -439,7 +440,8 @@ void *CA_ATTN_thread(void *pthrargs) {
          while (Ireg_bit(0x77, iob->CA_mask) == ON)
             wait();
          Eregs_Out[0x55] &= ~0x0200;             // Reset attention request
-         printf("CA%c: Sending Return status\n\r", iob->CA_id);
+         if (debug_reg & 0x80)
+            printf("CA%c: Sending Return status\n\r", iob->CA_id);
          // Send CA retun status to host
          send_carnstat(iob->tag_socket[iob->abswitch], &carnstat, &ackbuf,iob->CA_id);
          // Release the lock
@@ -455,7 +457,8 @@ void *CA_ATTN_thread(void *pthrargs) {
            iob = iob1;
          else
            iob = iob2;
-         printf("CA%c: L3 register 57 %04X \n\r", iob->CA_id, Eregs_Out[0x57]);
+         if (debug_reg & 0x80)
+            printf("CA%c: L3 register 57 %04X \n\r", iob->CA_id, Eregs_Out[0x57]);
          while (Ireg_bit(0x77, iob->CA_mask) == ON)
             wait();
          Eregs_Inp[0x55] |= 0x0800;              // Set Program Requested L3 interrupt
@@ -464,7 +467,8 @@ void *CA_ATTN_thread(void *pthrargs) {
          Eregs_Inp[0x77] |= iob->CA_mask;        // Set CA L3 interrupt request
          pthread_mutex_unlock(&r77_lock);
          CA1_IS_req_L3 = ON;
-         printf("CA%c: Requested L3 interrupt\n\r", iob->CA_id);
+         if (debug_reg & 0x80)
+            printf("CA%c: Requested L3 interrupt\n\r", iob->CA_id);
          while (Ireg_bit(0x77, iob->CA_mask) == ON) wait();
             wait();
          Eregs_Out[0x57] &= ~0x0080;             // Reset attention request
