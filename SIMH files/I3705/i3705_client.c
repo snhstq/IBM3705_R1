@@ -44,14 +44,17 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <signal.h>
+#include <unistd.h>
 #include <ctype.h>
 #include <pthread.h>
 #include <string.h>
+#include <ifaddrs.h>
 #include "i3705_defs.h"
 #include "htypes.h"
 #include "i3705_sdlc.h"
 #include "i3705_client.h"
 #include "codepage.c"
+#include <sys/syscall.h>
 
 #if !defined(min)
 #define  min(a,b)   (((a) <= (b)) ? (a) : (b))
@@ -62,13 +65,13 @@
 extern FILE *trace;
 extern int debug_reg;
 extern int8 Rsp_buf;                // Status Response buffer
-extern int8 Plen;                   // Length of PIU response
+extern int Plen;                   // Length of PIU response
 extern int8 last_lu;                // Last addressed lu
 
 COMMADPT *ca;
 void make_seq (COMMADPT * ca, BYTE * bufptr);
 int write_socket( int fd, const void *_ptr, int nbytes );
-static int send_packet (int csock, BYTE *buf, int len, char *caption);
+int send_packet (int csock, BYTE *buf, int len, char *caption);
 
 // Supported FMD NS Headers
 static unsigned char R010201[3] = {0x01, 0x02, 0x01};  // CONTACT
@@ -183,8 +186,7 @@ int proc_PIU (char BLU_buf[], int Pptr, int Blen, int Fcntl) {
    //================================================================
    if ((Fcntl & 0x0F) == RR) {         // Only a RR ?
       if (Rsp_buf == EMPTY) {          // Empty ?
-         if (ca->inpbufl > 0) {
-
+         if (ca->inpbufl > 0) {     
             /* Copy 3270 input to Response buffer after TH and RH */
             for (int j = 9; j < ca->inpbufl + 9; j++)
                RSP_buf[j] = ca->inpbuf[j-9];
@@ -208,6 +210,7 @@ int proc_PIU (char BLU_buf[], int Pptr, int Blen, int Fcntl) {
             ca->inpbufl = 0;
 
             Pptr = 3;                            // Reset ptr to begin of BLU buffer
+ 
             memcpy(&BLU_buf[Pptr], &RSP_buf[FD2_TH_0], Plen);
 
             if (debug_reg & 0x20) {              // Debug ?
@@ -224,9 +227,10 @@ int proc_PIU (char BLU_buf[], int Pptr, int Blen, int Fcntl) {
             return 0;
          }
       } else {                         // Response buffer is filled with a SNA cmd resp.
+
          // Clear BLU buffer, update RUlen & buffer content.
          Pptr = 3;                     // Reset ptr to begin of BLU buffer
-         for (int j = Pptr; j++, j < 500;)
+         for (int j = Pptr; j++, j < 65536;)
             BLU_buf[j] = 0x00;
          memcpy(&BLU_buf[Pptr + FD2_TH_0], &RSP_buf[FD2_TH_0], Plen);
 
@@ -283,7 +287,6 @@ int proc_PIU (char BLU_buf[], int Pptr, int Blen, int Fcntl) {
       if (((BLU_buf[Pptr + FD2_RH_0] & (unsigned char)0xFC) == 0x00) &&
 //         (BLU_buf[Pptr + FD2_TH_daf] == ca->lu_addr1 &&
             ca->sfd > 0) {
-
          if (debug_reg & 0x20) {
             fprintf(trace, "PIU2=>[%d]: ", Pptr);
             for (s = (char *) &BLU_buf[Pptr], i = 0; i < (Blen - Pptr); ++i, ++s)
@@ -587,8 +590,7 @@ int  nleft, nwritten;
 /*-------------------------------------------------------------------*/
 /* SUBROUTINE TO SEND A DATA PACKET TO THE CLIENT                    */
 /*-------------------------------------------------------------------*/
-static int
-send_packet (int csock, BYTE *buf, int len, char *caption)
+int send_packet(int csock, BYTE *buf, int len, char *caption)
 {
 int     rc;                             /* Return code               */
 
@@ -734,8 +736,7 @@ BYTE    buf[512];                       /* Receive buffer            */
 /* Return value:                                                     */
 /*      0=negotiation successful, -1=negotiation error               */
 /*-------------------------------------------------------------------*/
-static int
-negotiate(int csock, BYTE *class, BYTE *model, BYTE *extatr, U16 *devn,char *group)
+int negotiate(int csock, BYTE *class, BYTE *model, BYTE *extatr, U16 *devn,char *group)
 {
 int    rc;                              /* Return code               */
 char  *termtype;                        /* Pointer to terminal type  */
@@ -1142,11 +1143,25 @@ void *TEL_thread(void *arg)
     int devnum;                 /* device number copy for convenience*/
     int        sockopt;         /* Used for setsocketoption          */
     int rc;                     /* return code from various rtns     */
-    struct sockaddr_in sin;     /* bind socket address structure     */
+//    int ifa;                    /* Interface address                 */
+    struct sockaddr_in  sin, *sin2;     /* bind socket address structure     */
+    struct ifaddrs *nwaddr, *ifa;      /* interface address structure       */
+    char *ipaddr;
     BYTE bfr[256];
-    fprintf(stderr, "\nTEL: thread started succesfully... \n");
+    fprintf(stderr, "\nTEL: thread %d started succesfully... \n",syscall(SYS_gettid));
 
     ca =  malloc(sizeof(COMMADPT));
+    
+    getifaddrs(&nwaddr);      /* get network address */
+    for (ifa = nwaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr->sa_family == AF_INET && strcmp(ifa->ifa_name,"lo")) {
+           sin2 = (struct sockaddr_in *) ifa->ifa_addr;
+           ipaddr = inet_ntoa((struct in_addr) sin2->sin_addr);
+           if (strcmp(ifa->ifa_name,"eth")) break;
+        }
+    }
+    printf("\nTEL: Using network Address %s on %s for 3270 client connections\n",ipaddr,ifa->ifa_name);
+
 
     printf("\nca value is %p \n\r",ca);
     /* get a work copy of devnum (for messages) */
@@ -1159,16 +1174,16 @@ void *TEL_thread(void *arg)
     /* Reuse the address regardless of any */
     /* spurious connection on that port    */
     sockopt=1;
-    setsockopt(ca->lfd,SOL_SOCKET,SO_REUSEADDR,(GETSET_SOCKOPT_T*)&sockopt,sizeof(sockopt));
+    setsockopt(ca->lfd,SOL_SOCKET,SO_REUSEADDR,(void*)&sockopt,sizeof(sockopt));
 
     /* Bind the socket */
     sin.sin_family=AF_INET;
-    sin.sin_addr.s_addr= inet_addr("192.168.1.5");
+    sin.sin_addr.s_addr = inet_addr(ipaddr);
     sin.sin_port=htons(32001);
     rc=bind(ca->lfd,(struct sockaddr *)&sin,sizeof(sin));
     if (rc < 0)
     {
-        //WRMSG(HHC01000, "E",SSID_TO_LCSS(ca->dev->ssid),devnum,"bind()",strerror(HSO_errno));
+        printf("\nTEL: Socket bind failed\n");
         return NULL;
     }
     /* Start the listen */

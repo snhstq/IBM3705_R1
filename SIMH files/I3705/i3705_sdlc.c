@@ -31,6 +31,9 @@
    +-------+-------+-----------+-------//-------+-------+-------+-------+
    | BFlag | FAddr |Nr|PF|Ns|Ft| ... Iframe ... | Hfcs  | Lfcs  | EFlag |
    +-------+-------+-----------+-------//-------+-------+-------+-------+
+
+   This code module will simulate an SDLC client.
+   Only "needed to function" is implemented.
 */
 
 #include "sim_defs.h"
@@ -45,35 +48,63 @@ extern int8 last_S_Ns;
 int8 stat_mode = NDM;
 int8 new_S_Nr, new_S_Ns;               // Secondairy station frame numbers
 int8 rxtx_dir = RX;                    // Rx or Tx flag
+int  Blen;                             // Length of received BLU in buffer
 
-void proc_BLU(char BLU_buf[], int Blen);   // SDLC frame handler
+char BLU_buf[65536];                   // DLC header + TH + RH + RU + DLC trailer
+
+char proc_BLU(int8 icw_pcf, char tx_data, int j);  // SDLC frame handler
+// void proc_BLU(char BLU_buf[], int Blen);   // SDLC frame handler
 void proc_frame(char BLU_buf[], int Fptr, int Blen); // Process frame header
 int  proc_PIU(char PIU_buf[], int Fptr, int Blen, int Ftype);   // PIU handler
 void trace_Fbuf(char BLU_buf[], int Fptr, int Blen, int rxtx_dir);   // Print trace records
 
 //*********************************************************************
-//   Incomming SDLC frame (BLU) handler
+//   SDLC frame (BLU) handler
 //*********************************************************************
-void proc_BLU (char BLU_buf[], int Blen) {
+char proc_BLU(int8 icw_pcf, char tx_data, int j) {
    register char *s;
    int temp;
    int Fptr = 0;
    int direction = TX;
 
-   // Search for beginning(s) of SDLC frames and call the handler
-   while (Fptr < Blen) {
-      // Start of SDLC frame found ?
-      if ((BLU_buf[Fptr + BFlag] == 0x7E) && (BLU_buf[Fptr + FAddr] == 0xC1)) {
-         if (debug_reg & 0x20)
-            fprintf(trace, "LS1:    Calling proc_FRAME: Fptr=%d, Blen=%d \n", Fptr, Blen);
-         // ******************************************************************
-         proc_frame(BLU_buf, Fptr, Blen);   // Buffer + Frame ptr & BLU length
-         // ******************************************************************
-      }
-      Fptr++;                          // Keep searching for frames till end of buf.
+   /*
+    *  The scanner makes the following calls to the SDLC handler:
+    *  char = proc_BLU(int8 icw_pcf, char tx_data, int j);
+    *  -----------------------------------------------------
+    *  rx_byte        (     0x6    ,    void    , BLU_idx ) (Monitor for flag)
+    *  rx_byte        (     0x7    ,    void    , BLU_idx ) (Transfer data)
+    *  void           (     0x9    ,    tx_data , BLU_idx ) (Tx data to buffer)
+    *  void           (     0xC    ,    void    , BLU_idx ) (Start xmit buff content)
+    */
+   switch (icw_pcf) {
+      case 0x6:                        // Return (received) byte from BLU buffer
+      case 0x7:
+         return (BLU_buf[j]);
+         break;
+
+      case 0x9:                        // Store icw_pdf in BLU buffer
+         BLU_buf[j] = tx_data;
+         return 0;
+         break;
+
+      case 0xC:                        // Process BLU buffer
+         // Search for beginning(s) of SDLC frames and call the handler
+         Blen = j;                     // Set length of received BLU in buffer
+         while (Fptr < Blen) {
+            // Start of an SDLC frame found ?
+            if ((BLU_buf[Fptr + BFlag] == 0x7E) && (BLU_buf[Fptr + FAddr] == 0xC1)) {
+               if (debug_reg & 0x20)
+                  fprintf(trace, "LS1:    Calling proc_FRAME: Fptr=%d, Blen=%d \n", Fptr, Blen);
+               // ******************************************************************
+               proc_frame(BLU_buf, Fptr, Blen);   // Buffer + Frame ptr & BLU length
+               // ******************************************************************
+            }
+            Fptr++;                    // Keep searching for frames till end of buf.
+         }
+         Fptr = 0;
+         return 0;                     // with response in BLU
+         break;
    }
-   Fptr = 0;
-   return;                             // with response in BLU
 }
 
 
@@ -123,7 +154,7 @@ void proc_frame(char BLU_buf[], int Fptr, int Blen) {
                break;
             default:
                break;
-         }   // End of switch TCntl & 0xEF
+         }  // End of switch TCntl & 0xEF
          if (debug_reg & 0x20)
             trace_Fbuf(BLU_buf, Fptr, Blen - Fptr, RX); // Print trace records
          break;
@@ -228,6 +259,7 @@ void trace_Fbuf(char BLU_buf[], int Fptr, int Flen, int rxtx_dir) {
       fprintf(trace, "LS1: => ");   // 3705 -> client
    else
       fprintf(trace, "LS1: <= ");   // 3705 <- client
+
    switch (BLU_buf[Fptr + FCntl] & 0x03) {
       case UNNUM:
          // *** UNNUMBERED FORMAT ***
