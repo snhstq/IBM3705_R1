@@ -254,7 +254,7 @@ void send_carnstat(int sockptr, char *carnstat, char *ackbuf, char CA_id) {
    int rc;                         // Return code
 
    while (Ireg_bit(0x77, 0x0028) == ON)
-       wait();                     // Wait for CA 1 L3 interrupt reset
+      wait();                      // Wait for CA 1 L3 interrupt reset
 
    // If DE and CE and reset Write Break Remember and Channel Active
    if (*carnstat & CSW_DEND) {
@@ -420,7 +420,7 @@ void *CA_ATTN_thread(void *pthrargs) {
 
    while (1) {
       while (iob1->CA_active == FALSE && iob2->CA_active == FALSE)
-          wait();
+         wait();
 
       if (((Eregs_Out[0x55] & 0x0200) == 0x0200) || ackbuf == 0xF8 ) {
          // Grab the lock to avoid sync issues
@@ -854,31 +854,31 @@ void *CAx_thread(void *pthargs) {
                   if (debug_reg & 0x80)
                      printf("Condition = %d\n\r", condition);
 
-              }  while (condition == 0);   // End of do stmt.
+               }  while (condition == 0);   // End of do stmt.
 
-              if (condition != 2) {
-                 while (Ireg_bit(0x77, iob->CA_mask) == ON)
-                    wait();                                // Wait for CA1 L3 interrupt reset
-                 pthread_mutex_lock(&r77_lock);
-                 Eregs_Inp[0x77] |= iob->CA_mask;          // Set CA1  L3 interrupt
-                 pthread_mutex_unlock(&r77_lock);
-                 CA1_IS_req_L3 = ON;                       // Chan Adap Initial Sel request flag
-                 while (Ireg_bit(0x77, 0x008) == ON)
-                    wait();                                // Wait for initial selection reset
-              }
+               if (condition != 2) {
+                  while (Ireg_bit(0x77, iob->CA_mask) == ON)
+                     wait();                               // Wait for CA1 L3 interrupt reset
+                  pthread_mutex_lock(&r77_lock);
+                  Eregs_Inp[0x77] |= iob->CA_mask;         // Set CA1  L3 interrupt
+                  pthread_mutex_unlock(&r77_lock);
+                  CA1_IS_req_L3 = ON;                      // Chan Adap Initial Sel request flag
+                  while (Ireg_bit(0x77, 0x008) == ON)
+                     wait();                               // Wait for initial selection reset
+               }
 
-              rc = send(iob->bus_socket[iob->abswitch], (void*)&data_buffer, wdcnttot,0);
-              // Wait for the ACK from the host
-              recv_ack(iob->bus_socket[iob->abswitch]);
+               rc = send(iob->bus_socket[iob->abswitch], (void*)&data_buffer, wdcnttot,0);
+               // Wait for the ACK from the host
+               recv_ack(iob->bus_socket[iob->abswitch]);
 
-              // Send CA return status to host
-              if (condition != 3) {
-                 carnstat = ((Eregs_Out[0x54] >> 8 ) & 0x00FF);  // Get CA return status
-                 if (condition == 2)
-                    carnstat = CSW_DEND;
-                 send_carnstat(iob->bus_socket[iob->abswitch], &carnstat, &ackbuf, iob->CA_id);
-              }
-              break;
+               // Send CA return status to host
+               if (condition != 3) {
+                  carnstat = ((Eregs_Out[0x54] >> 8 ) & 0x00FF);  // Get CA return status
+                  if (condition == 2)
+                     carnstat = CSW_DEND;
+                  send_carnstat(iob->bus_socket[iob->abswitch], &carnstat, &ackbuf, iob->CA_id);
+               }
+               break;
 
             case 0x03:       // NO-OP ?
                Eregs_Inp[0x5C] |= 0x0100;                  // Set CA Command Register
