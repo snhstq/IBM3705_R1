@@ -226,8 +226,6 @@ int host_connect(struct IO3705 *iob, int abport) {
             iob->CA_id,iob->CA_socket[abport], iob->bus_socket[abport], inet_ntoa(iob->address[abport].sin_addr),
             (ntohs(iob->address[abport].sin_port)));
    }
-//   ;fcntl(iob->bus_socket[abport], F_SETFL, fcntl(iob->bus_socket[abport], F_GETFL) & ~O_NONBLOCK);
-
 
    // Get the tag connection
    while (1) {
@@ -253,10 +251,10 @@ int host_connect(struct IO3705 *iob, int abport) {
 // Function to send CA return status to the host
 // ************************************************************
 void send_carnstat(int sockptr, char *carnstat, char *ackbuf, char CA_id) {
-   int rc;                      /* Return code */
+   int rc;                         // Return code
 
    while (Ireg_bit(0x77, 0x0028) == ON)
-       wait();     // Wait for CA 1 L3 interrupt reset
+       wait();                     // Wait for CA 1 L3 interrupt reset
 
    // If DE and CE and reset Write Break Remember and Channel Active
    if (*carnstat & CSW_DEND) {
@@ -463,7 +461,7 @@ void *CA_ATTN_thread(void *pthrargs) {
          Eregs_Inp[0x55] |= 0x0800;              // Set Program Requested L3 interrupt
          Eregs_Out[0x55] |= 0x3000;              // Set INCWAR and OUTCWAR valid for IPL
          pthread_mutex_lock(&r77_lock);
-         Eregs_Inp[0x77] |= iob->CA_mask;                  // Set CA L3 interrupt request
+         Eregs_Inp[0x77] |= iob->CA_mask;        // Set CA L3 interrupt request
          pthread_mutex_unlock(&r77_lock);
          CA1_IS_req_L3 = ON;
          printf("CA%c: Requested L3 interrupt\n\r", iob->CA_id);
@@ -546,8 +544,6 @@ void *CA_T2_thread(void *arg) {
          start_listen(iob2, iob2->abswitch);     // Listen and add polling
          iob2->abswhist = iob2->abswitch;
       }
-
-
 
       if (!IsSocketConnected(iob1->CA_socket[iob1->abswitch])) {
          event.events = EPOLLIN | EPOLLONESHOT;
@@ -715,7 +711,7 @@ void *CAx_thread(void *pthargs) {
    printf("\nCA%c: thread %d started sucessfully... \n\r", iob->CA_id, getpid());
 
    // Init the lock
-   if (pthread_mutex_init(&lock, NULL) !=0)  {
+   if (pthread_mutex_init(&lock, NULL) != 0)  {
       printf("\nCA%c: Lock initialization failed \n\r", iob->CA_id);
       exit(EXIT_FAILURE);
    }
@@ -996,12 +992,12 @@ void *CAx_thread(void *pthargs) {
                      }  // End For
                      iob->bufferl = iob->bufferl - wdcnttmp;
                      bufbase = bufbase + i;                // Buffer base points to start of remaing data
-                     if ((cacw1 & 0x8000) && wdcnt == 0) {  // If IN and count zero
-                        if ((cacw1 & 0x2000) == 0x2000)  {  // Zero Override On
+                     if ((cacw1 & 0x8000) && wdcnt == 0) {   // If IN and count zero
+                        if ((cacw1 & 0x2000) == 0x2000)  {   // Zero Override On
                            Eregs_Inp[0x55] |= 0x4000;      // Set Zero Override in reg 55
                            condition = 0;
                            pthread_mutex_lock(&r77_lock);
-                           Eregs_Inp[0x77] |= iob->CA_mask; // Set CA1 L3 interrupt request
+                           Eregs_Inp[0x77] |= iob->CA_mask;  // Set CA1 L3 interrupt request
                            pthread_mutex_unlock(&r77_lock);
                            CA1_IS_req_L3 = ON;             // Chan Adap L3 request flag
                            while (Ireg_bit(0x77, iob->CA_mask) == ON)
