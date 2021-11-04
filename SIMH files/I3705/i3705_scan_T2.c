@@ -381,6 +381,7 @@ void *CS2_thread(void *arg) {
                fprintf(trace, "\n>>> CS2[%1X]: SVCL2 interrupt issued for PCF = %1X \n\r",
                        icw_pcf_prev[t], icw_pcf_prev[t]);
             pthread_mutex_lock(&r77_lock);
+ //         Eregs_Inp[0x77] |= 0x4000; // Indicate L2 scanner interrupt
             pthread_mutex_unlock(&r77_lock);
             svc_req_L2 = ON;           // Issue a level 2 interrrupt
             CS2_req_L2_int = OFF;      // Reset int req flag

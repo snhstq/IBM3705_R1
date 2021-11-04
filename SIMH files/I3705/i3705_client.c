@@ -186,7 +186,7 @@ int proc_PIU (char BLU_buf[], int Pptr, int Blen, int Fcntl) {
    //================================================================
    if ((Fcntl & 0x0F) == RR) {         // Only a RR ?
       if (Rsp_buf == EMPTY) {          // Empty ?
-         if (ca->inpbufl > 0) {     
+         if (ca->inpbufl > 0) {
             /* Copy 3270 input to Response buffer after TH and RH */
             for (int j = 9; j < ca->inpbufl + 9; j++)
                RSP_buf[j] = ca->inpbuf[j-9];
@@ -210,7 +210,7 @@ int proc_PIU (char BLU_buf[], int Pptr, int Blen, int Fcntl) {
             ca->inpbufl = 0;
 
             Pptr = 3;                            // Reset ptr to begin of BLU buffer
- 
+
             memcpy(&BLU_buf[Pptr], &RSP_buf[FD2_TH_0], Plen);
 
             if (debug_reg & 0x20) {              // Debug ?
@@ -311,14 +311,14 @@ int proc_PIU (char BLU_buf[], int Pptr, int Blen, int Fcntl) {
             Dbuf[RUlen++] = IAC;
             Dbuf[RUlen++] = EOR_MARK;
          }
-         
+
          if (debug_reg & 0x20) {
             fprintf(trace, "3270=>[%d]: ", RUlen);
             for ( i = 0; i < RUlen; i++)
                fprintf(trace, "%02X ", (int) Dbuf[i] & 0xFF);
             fprintf(trace, "\n");
          }
-         
+
          //************************************************************
          send_packet (ca->sfd, (BYTE *) Dbuf, RUlen, "3270 Data");
          //************************************************************
@@ -1151,7 +1151,7 @@ void *TEL_thread(void *arg)
     fprintf(stderr, "\nTEL: thread %d started succesfully... \n",syscall(SYS_gettid));
 
     ca =  malloc(sizeof(COMMADPT));
-    
+
     getifaddrs(&nwaddr);      /* get network address */
     for (ifa = nwaddr; ifa != NULL; ifa = ifa->ifa_next) {
         if (ifa->ifa_addr->sa_family == AF_INET && strcmp(ifa->ifa_name,"lo")) {
@@ -1163,7 +1163,7 @@ void *TEL_thread(void *arg)
     printf("\nTEL: Using network Address %s on %s for 3270 client connections\n",ipaddr,ifa->ifa_name);
 
 
-    printf("\nca value is %p \n\r",ca);
+//    printf("\nca value is %p \n\r",ca);
     /* get a work copy of devnum (for messages) */
     ca->sfd = 0;
     devnum=ca->devnum;

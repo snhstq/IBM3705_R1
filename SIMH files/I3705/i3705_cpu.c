@@ -1,6 +1,6 @@
 /* 3705_cpu.c: IBM 3705 CCU simulator (18bit EA)
 
-  Copyright (c) 2021, Henk Stegeman and Edwin Freekenhorst (he was missing 3 bytes :-)
+  Copyright (c) 2021, Henk Stegeman and Edwin Freekenhorst
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -25,7 +25,7 @@
 
   ------------------------------------------------------------------------------
 
-  cpu          IBM 3705 central processor (with 20bit Extended Addressing)
+  cpu          IBM 3705 central processor (with 20bit Extended Addressin)
 
   The IBM 3705 Communications Controller is a transmission control unit
   designed to assume many of the line-control and processing functions
@@ -157,77 +157,75 @@ Instruction formats:
 
 #include <sched.h>
 #include "i3705_defs.h"
-#include "i3705_Eregs.h"                       /* Exernal regs defs */
+#include "i3705_Eregs.h"                                /* Exernal regs defs */
 #include <pthread.h>
 
-#define UNIT_V_MSIZE (UNIT_V_UF+3)             /* dummy mask */
+#define UNIT_V_MSIZE (UNIT_V_UF+3)                      /* dummy mask */
 #define UNIT_MSIZE   (1 << UNIT_V_MSIZE)
 
-extern void Get_ICW(int abar);                 /* CS2: ICW ===> Inp_Eregs 44, 45, 46, 47 rtn */
-extern int abar;                               /* CS2: scanner interface addr 0x0840 */
-extern int8 icw_scf[];                         /* CS2: sdf */
-extern int8 icw_pdf[];                         /* CS2: pdf */
-extern int8 icw_lcd[];                         /* CS2: lcd */
-extern int8 icw_pcf[];                         /* CS2: pcf */
-extern int8 icw_sdf[];                         /* CS2: sdf */
-extern int8 icw_Rflags[];                      /* CS2: Rflags */
-extern int8 icw_pdf_reg;                       /* CS2: pdf is filled or empty state */
-extern int8 icw_pcf_new;                       /* CS2: new pdf */
-extern int8 icw_pcf_mod;                       /* CS2: modified pcf flag */
-extern pthread_mutex_t icw_lock;               /* CS2: ICW update lock */
-pthread_mutex_t r77_lock;                      /* CA2/CS2: Reg77 update lock */
+extern void Get_ICW(int abar);                          /* CS2: ICW ===> Inp_Eregs 44, 45, 46, 47 rtn */
+extern int abar;                                        /* CS2: scanner interface addr 0x0840 */
+extern int8 icw_scf[];                                  /* CS2: sdf */
+extern int8 icw_pdf[];                                  /* CS2: pdf */
+extern int8 icw_lcd[];                                  /* CS2: lcd */
+extern int8 icw_pcf[];                                  /* CS2: pcf */
+extern int8 icw_sdf[];                                  /* CS2: sdf */
+extern int8 icw_Rflags[];                               /* CS2: Rflags */
+extern int8 icw_pdf_reg;                                /* CS2: pdf is filled or empty state */
+extern int8 icw_pcf_new;                                /* CS2: new pdf */
+extern int8 icw_pcf_mod;                                /* CS2: modified pdf flag */
+extern pthread_mutex_t icw_lock;                        /* CS2: ICW update lock */
+pthread_mutex_t r77_lock;                               /* CA2/CS2: Reg77 update lock */
 
-uint8 M[MAXMEMSIZE] = { 0 };                   /* Memory size 3705 */
-int32 GR[8][4] = { 0x00 };                     /* General Registers Group 0-3 */
-int32 opcode;                                  /* Operation Code 16 bits */
-int32 opcode0, opcode1;                        /* OpCode byte0(H) & Byte1(L) */
-int8  CL_C[4] = { OFF };                       /* Condition Latches 'C' */
-int8  CL_Z[4] = { OFF };                       /* Condition Latches 'Z' */
-int32 Eregs_Inp[128] = { 0xEFEF };             /* External regs X'00 -> X'7F' inp */
-int32 Eregs_Out[128] = { 0x0000 };             /* External regs X'00 -> X'7F' out */
+uint8 M[MAXMEMSIZE] = { 0 };                            /* Memory 3705 */
+int32 GR[8][4] = { 0x00 };                              /* General Registers Group 0-3 */
+int32 opcode;                                           /* Operation Code 16 bits */
+int32 opcode0, opcode1;                                 /* OpCode byte0(H) & Byte1(L) */
+int8  CL_C[4] = { OFF };                                /* Condition Latches 'C' */
+int8  CL_Z[4] = { OFF };                                /* Condition Latches 'Z' */
+int32 Eregs_Inp[128] = { 0xEFEF };                      /* External regs X'00 -> X'7F' inp */
+int32 Eregs_Out[128] = { 0x0000 };                      /* External regs X'00 -> X'7F' out */
 
 int8  int_lvl_req[1+5]  = {0, OFF, OFF, OFF, OFF, OFF}; /* Requested Program Levels */
 int8  int_lvl_ent[1+5]  = {0, OFF, OFF, OFF, OFF, OFF}; /* Entered Program Levels */
 int8  int_lvl_mask[1+5] = {0, ON,  ON,  ON,  ON,  ON }; /* Masked Program Levels */
-int8  ipl_req_L1 = OFF;                        /* IPL L1 request flag */
-int8  diag_req_L2 = OFF;                       /* Diagnostic L2 (in test mode only) */
-int8  svc_req_L2 = OFF;                        /* SVC L2 request flag */
-int8  pci_req_L3 = OFF;                        /* PCI L3 request flag */
-int8  timer_req_L3 = OFF;                      /* Interval timer L3 request flag */
-int8  inter_req_L3 = OFF;                      /* Panel interrupt L3 request flag */
-int8  pci_req_L4 = OFF;                        /* PCI L4 request flag */
-int8  svc_req_L4 = OFF;                        /* SVC L4 request flag */
+int8  ipl_req_L1 = OFF;                                 /* IPL L1 request flag */
+int8  diag_req_L2 = OFF;                                /* Diagnostic L2 (in test mode only) */
+int8  svc_req_L2 = OFF;                                 /* SVC L2 request flag */
+int8  pci_req_L3 = OFF;                                 /* PCI L3 request flag */
+int8  timer_req_L3 = OFF;                               /* Interval timer L3 request flag */
+int8  inter_req_L3 = OFF;                               /* Panel interrupt L3 request flag */
+int8  pci_req_L4 = OFF;                                 /* PCI L4 request flag */
+int8  svc_req_L4 = OFF;                                 /* SVC L4 request flag */
 // These flags below belong in chan.c
-int8  CA1_DS_req_L3 = OFF;                     /* Chan Adap Data/Status request flag */
-int8  CA1_IS_req_L3 = OFF;                     /* Chan Adap Initial Sel request flag */
-int8  CA1_NSC_end_seq = OFF;                   /* NSC channel end xfer seq flag */
-int8  CA1_NSC_final_seq = OFF;                 /* NSC channel final xfer seq flag */
-int8  CA1_NSC_SB_clred = OFF;                  /* NSC status byte cleared flag */
+int8  CA1_DS_req_L3 = OFF;                              /* Chan Adap Data/Status request flag */
+int8  CA1_IS_req_L3 = OFF;                              /* Chan Adap Initial Sel request flag */
+int8  CA1_NSC_end_seq = OFF;                            /* NSC channel end xfer seq flag */
+int8  CA1_NSC_final_seq = OFF;                          /* NSC channel final xfer seq flag */
+int8  CA1_NSC_SB_clred = OFF;                           /* NSC status byte cleared flag */
 
-int8  last_P_Ns;                               /* Last frame Ns received from prim station */
-int8  last_S_Ns;                               /* Last frame Ns send to prim station */
-int8  last_lu;
+int8 last_P_Ns;                                         /* Last frame Ns received from prim station */
+int8 last_S_Ns;                                         /* Last frame Ns send to prim station */
+int8 last_lu;
 
-int8  load_state = OFF;                        /* Load state flag (IPL loadTest mode flag */
-int8  test_mode  = OFF;                        /* Test mode flag */
-int8  wait_state = OFF;                        /* Wait state flag */
-int8  pgm_stop   = OFF;                        /* Program STOP flag */
-int8  OP_reg_chk = OFF;                        /* Invalid instruction */
-int8  adr_ex_chk = OFF;                        /* Address exception check */
-int8  IO_L5_chk  = OFF;                        /* I/O instr in L5 */
-int32 lvl;                                     /* Active Program Level (1...5) */
-int32 Grp;                                     /* Active Register Group (0...3) */
-int32 PC;                                      /* Program Counter */
-int32 LAR;                                     /* Lagging Address Register */
-int32 saved_PC;                                /* Previous (saved) PC */
-int32 old_CRC_reg;                             /* Used for CRC calculation. */
-char  CRC_data_reg;                            /* Used for CRC calculation. */
-uint16 debug_reg = 0x0000;                     /* Bit flags for debug/trace */
-int   debug_flag = OFF;                        /* 1 when trace.log open */
+int8  load_state = OFF;                                 /* Load state flag (IPL loadTest mode flag */
+int8  test_mode  = OFF;                                 /* Test mode flag */
+int8  wait_state = OFF;                                 /* Wait state flag */
+int8  pgm_stop   = OFF;                                 /* Program STOP flag */
+int8  OP_reg_chk = OFF;                                 /* Invalid instruction */
+int8  adr_ex_chk = OFF;                                 /* Address exception check */
+int8  IO_L5_chk  = OFF;                                 /* I/O instr in L5 */
+int32 lvl;                                              /* Active Program Level (1...5) */
+int32 Grp;                                              /* Active Register Group (0...3) */
+int32 PC;                                               /* Program Counter */
+int32 LAR;                                              /* Lagging Address Register */
+int32 saved_PC;                                         /* Previous (saved) PC */
+int32 debug_reg = 0x00;                                 /* Bit flags for debug/trace */
+int32 debug_flag = OFF;                                 /* 1 when trace.log open */
 FILE  *trace;
-int   tbar;                                    /* ICW table pointer */
+int   tbar;                                             /* ICW table pointer */
 int32 cc = 1;
-int32 val[4] = { 0x00, 0x00, 0x00, 0x00 };     /* Used for printing mnem */
+int32 val[4] = { 0x00, 0x00, 0x00, 0x00 };              /* Used for printing mnem */
 
 t_stat cpu_ex (t_value *vptr, t_addr addr, UNIT *uptr, int32 sw);
 t_stat cpu_dep (t_value val, t_addr addr, UNIT *uptr, int32 sw);
@@ -235,11 +233,9 @@ t_stat cpu_reset (DEVICE *dptr);
 t_stat cpu_set_size (UNIT *uptr, int32 val, char *cptr, void *desc);
 t_stat cpu_boot (int32 unitno, DEVICE *dptr);
 
-// Decare used functions
 int32 RegGrp(int32 level);
 int32 GetMem(int32 addr);
 int32 PutMem(int32 addr, int32 data);
-uint16 CRC_sdlc(int old_crc, unsigned char add_char);
 
 int16 reason;
 
@@ -254,7 +250,7 @@ UNIT cpu_unit = { UDATA (NULL, UNIT_FIX + UNIT_BINK, MAXMEMSIZE) };
 
 REG cpu_reg[] = {
     { HRDATA (IAR, PC, 20), REG_RO },
-    { HRDATA (LAR, LAR, 20), REG_RO },
+    { HRDATA (LAR, LAR,20), REG_RO },
     { HRDATA (LVL, lvl, 8), REG_RO },
     { HRDATA (GRP, Grp, 8), REG_RO },
 
@@ -392,7 +388,6 @@ REG cpu_reg[] = {
     { HRDATA (CU7FO, Eregs_Out[0x7F], 16) },
 
     /* Misc */
-    { HRDATA (OLDCRC, old_CRC_reg, 16) },
     { HRDATA (WRU, sim_int_char, 8) },
     { HRDATA (DEBUG, debug_reg, 16) },
     { NULL }
@@ -416,7 +411,7 @@ DEVICE cpu_dev = {
 };
 
 //********************************************************
-// IBM 3705 CCU instruction simulator
+// Instruction simulator
 //********************************************************
 
 t_stat sim_instr (void) {
@@ -458,11 +453,11 @@ reason = 0;
 //##################### START OF SIMULATOR WHILE LOOP ######################
 // Scroll down 1800 lines to find the end of this while loop
 while (reason == 0) {                          /* Loop until halted */
-   if (sim_interval <= 0) {                    /* Check SIMH clock queue */
+   if (sim_interval <= 0) {                    /* Check clock queue */
       if (reason = sim_process_event())
           break;                               /* Stop simulation */
    }
-   sim_interval = sim_interval - 1;            /* Tick the SIMH clock */
+   sim_interval = sim_interval - 1;            /* Tick the clock */
 
    if (sim_brk_summ && sim_brk_test(PC, SWMASK('E')) ) {  /* Any breakpoint ? */
       reason = STOP_IBKPT;                     /* Stop simulation */
@@ -483,31 +478,24 @@ while (reason == 0) {                          /* Loop until halted */
 //      fclose(trace);
 //      debug_flag = OFF;
 //   }
+
 //********************************************************
-//  Open debug trace facility
+//  Debug trace facility
 //********************************************************
-//   if (debug_reg != 0x00) {                          /* Any trace active ? */
-      if (debug_flag == OFF) {  /* Open log file */
-         trace = fopen("trace.log", "w");
-         if (trace != 0) {
-            printf("Opening log file... \n\r");
-         } else {
-            printf("Error detected while opening log file ! \n\r");
-         }
-         fprintf(trace,
-            "     ****** 3705 Executed instructions log file ****** \n\n"
-            "     sim> d debug 01 - trace IAR, mnem, C & Z & lvl \n"
-            "                  02 - trace all enter/leave/wait interrupts \n"
-            "                  04 - trace scanner ext input regs \n"
-            "                  08 - trace chan adap ext input regs \n"
-            "                  10 - trace CCU ext input regs \n"
-            "                  20 - trace PIU's \n"
-            "                  40 - trace ICW PCF \n"
-            "                  80 - trace channel activity \n"
-            "          AA55 = Unused external register \n\n");
-         debug_flag = ON;
-      }
-//   }
+   if (debug_flag == OFF) {
+      trace = fopen("trace.log", "w");
+      fprintf(trace, "     ****** 3705 Executed instructions log file ****** \n\n"
+                     "     sim> d debug 01 - trace IAR, mnem, C & Z & lvl \n"
+                     "                  02 - trace all enter/leave/wait interrupts \n"
+                     "                  04 - trace scanner ext input regs \n"
+                     "                  08 - trace channel adap ext input regs \n"
+                     "                  10 - trace CCU ext input regs \n"
+                     "                  20 - trace PIU's \n"
+                     "                  40 - trace ICW PCF \n"
+                     "                  80 - trace channel activity \n"
+                     "          AA55 = Unused external register \n\n");
+      debug_flag = ON;
+   }
 
 //********************************************************
 //  IBM 3705 CCU trace print statements
@@ -567,22 +555,21 @@ while (reason == 0) {                          /* Loop until halted */
       int_lvl_req[4] = ON;                     // Set L4 interrupt request
    else int_lvl_req[4] = OFF;
 
-   if (debug_reg & 0x02) {                     // Trace interrupt flags
+   if (debug_reg & 0x02) {                     /* Trace interrupt flags */
       if (wait_state != ON) {
          fprintf(trace, "\n>>  REQ[1-5] = %d %d %d %d %d   ENT[1-5] = %d %d %d %d %d   MSK[1-5] = %d %d %d %d %d\n" ,
                int_lvl_req[1],  int_lvl_req[2],  int_lvl_req[3],  int_lvl_req[4],  int_lvl_req[5],
                int_lvl_ent[1],  int_lvl_ent[2],  int_lvl_ent[3],  int_lvl_ent[4],  int_lvl_ent[5],
                int_lvl_mask[1], int_lvl_mask[2], int_lvl_mask[3], int_lvl_mask[4], int_lvl_mask[5]);
-         fprintf(trace, "\n>>  CRC old_CRC = %04X, CRC_data = %02X", old_CRC_reg, CRC_data_reg);
    }  }
 
 //********************************************************
 // Check all 5 program levels for any work...
 //********************************************************
-   for (i = 1; i < 6; i++) {                   // 1, 2, 3, 4...5
+   for (i = 1; i < 6; i++) {                   // 1, 2, 3, 4...5                          d
       if (int_lvl_ent[i] == OFF) {             // Lvl already running ? => continue
 //         printf("ENTERED = OFF  lvl=%d \n\r", i );
-         if ((int_lvl_req[i] == ON) || (i == 5)) {   // Lvl request pending ? => enter if not masked
+         if ((int_lvl_req[i] == ON) || (i == 5)) {           // Lvl request pending ? => enter if not masked
 //            printf("REQUESTED = ON lvl=%d \n\r", i );
             if (int_lvl_mask[i] == OFF) {      // Lvl mask on ? => skip this level
 //               printf("MASK = OFF     lvl=%d\n\r", i );
@@ -607,26 +594,26 @@ while (reason == 0) {                          /* Loop until halted */
                      fprintf(trace, "\n>>> Entering lvl=5 -- MSKL5=0 \n");
                }
                if (debug_reg & 0x02) {
-                  if (lvl == 1)                // Display CCU interrupt levels
-                     printf(">>> Entering lvl 1 -- IPL=%d; OPchk=%d; IOchk=%d; AEchk=%d \n\r",
-                             ipl_req_L1, OP_reg_chk, IO_L5_chk, adr_ex_chk);
-                  if (lvl == 2)
-                     printf(">>> Entering lvl 2 -- Diag=%d; SVCL2=%d \n\r",
-                             diag_req_L2, svc_req_L2);
-                  if (lvl == 3)
-                     printf(">>> Entering lvl 3 -- Int=%d; Timer=%d; PCIL3=%d; CA1_IS=%d; CA1_D/S=%d \n\r",
-                             inter_req_L3, timer_req_L3, pci_req_L3, CA1_IS_req_L3, CA1_DS_req_L3);
-                  if (lvl == 4)
-                     printf(">>> Entering lvl 4 -- PCIL4=%d; SVCL4=%d \n\r",
-                             pci_req_L4, svc_req_L4);
-                  if (lvl == 5)
+               if (lvl == 1)                   // Display CCU interrupt levels
+                  printf(">>> Entering lvl 1 -- IPL=%d; OPchk=%d; IOchk=%d; AEchk=%d \n\r",
+                          ipl_req_L1, OP_reg_chk, IO_L5_chk, adr_ex_chk);
+               if (lvl == 2)
+                  printf(">>> Entering lvl 2 -- Diag=%d; SVCL2=%d \n\r",
+                          diag_req_L2, svc_req_L2);
+               if (lvl == 3)
+                  printf(">>> Entering lvl 3 -- Int=%d; Timer=%d; PCIL3=%d; CA1_IS=%d; CA1_D/S=%d \n\r",
+                          inter_req_L3, timer_req_L3, pci_req_L3, CA1_IS_req_L3, CA1_DS_req_L3);
+               if (lvl == 4)
+                  printf(">>> Entering lvl 4 -- PCIL4=%d; SVCL4=%d \n\r",
+                          pci_req_L4, svc_req_L4);
+               if (lvl == 5)
                   printf(">>> Entering lvl 5 -- MSKL5=0 \n\r");
                }
                wait_state = OFF;               // Exiting wait state. Work to do...
 
                switch (lvl) {
                   case 1:
-                     GR[0][0]   = 0x0010;      // Start addr level 1
+                     GR[0][0] = 0x0010;        // Start addr level 1
                      break;
                   case 2:
                      GR[0][Grp] = 0x0080;      // Start addr level 2
@@ -753,9 +740,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0xB800):
-         /* BCT  R(N), T         [RT]  */
+         /* BCT  R(N),T         [RT]  */
          /* 01234567 89012345
-            10111RRN 1T<-->T#          */
+            10111RRN 1T<-->T#         */
          if (opcode1 & 0x80) {                 /* Must be a 1, else it is BAL or LA instr */
             Grp = RegGrp(lvl);
             Rfld = (opcode0 & 0x06) + 1;       /* Extract odd register nr */
@@ -783,9 +770,9 @@ while (reason == 0) {                          /* Loop until halted */
       case (0xD800):
       case (0xE800):
       case (0xF800):
-         /* BB   R(N), T         [RT]  */
+         /* BB   R(N),T         [RT]  */
          /* 01234567 89012345
-            11MM1RRN MT<-->T#          */
+            11MM1RRN MT<-->T#         */
          Mfld = ((opcode0 & 0x30) >> 3) + ((opcode1 & 0x80) >> 7);
          Rfld = (opcode0 & 0x06) + 1;          /* Extract odd register nr */
          Nfld = opcode0 & 0x01;
@@ -807,9 +794,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x8000):
-         /* LRI  R(N), I         [RI]  */
+         /* LRI  R(N),I         [RI]  */
          /* 01234567 89012345
-            10000RRN I<---->I          */
+            10000RRN I<---->I         */
          Grp = RegGrp(lvl);
          Rfld = (opcode0 & 0x06) + 1;          /* Extract odd register nr */
          Nfld = (opcode0 & 0x01);
@@ -831,9 +818,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x9000):
-         /* ARI  R(N), I         [RI]  */
+         /* ARI  R(N),I         [RI]  */
          /* 01234567 89012345
-            10010RRN I<---->I          */
+            10010RRN I<---->I         */
          Grp = RegGrp(lvl);
          Rfld = (opcode0 & 0x06) + 1;          /* Extract odd register nr */
          Nfld = (opcode0 & 0x01);
@@ -866,9 +853,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0xA000):
-         /* SRI  R(N), I         [RI]  */
+         /* SRI  R(N),I         [RI]  */
          /* 01234567 89012345
-            10100RRN I<---->I          */
+            10100RRN I<---->I         */
          Grp = RegGrp(lvl);
          Rfld = (opcode0 & 0x06) + 1;          /* Extract odd register nr */
          Nfld = (opcode0 & 0x01);
@@ -902,9 +889,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0xB000):
-         /* CRI  R(N), I         [RI]  */
+         /* CRI  R(N),I         [RI]  */
          /* 01234567 89012345
-            10110RRN I<---->I          */
+            10110RRN I<---->I         */
          Grp  = RegGrp(lvl);
          Rfld = (opcode0 & 0x06) + 1;          /* Extract odd register nr */
          Nfld = (opcode0 & 0x01);
@@ -925,9 +912,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0xC000):
-         /* XRI  R(N), I         [RI]  */
+         /* XRI  R(N),I         [RI]  */
          /* 01234567 89012345
-            11000RRN I<---->I          */
+            11000RRN I<---->I         */
          Grp  = RegGrp(lvl);
          Rfld = (opcode0 & 0x06) + 1;          /* Extract odd register nr */
          Nfld = (opcode0 & 0x01);
@@ -954,9 +941,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0xD000):
-         /* ORI  R(N), I         [RI]  */
+         /* ORI  R(N),I         [RI]  */
          /* 01234567 89012345
-            11010RRN I<---->I          */
+            11010RRN I<---->I         */
          Grp = RegGrp(lvl);
          Rfld = (opcode0 & 0x06) + 1;          /* Extract odd register nr */
          Nfld = (opcode0 & 0x01);
@@ -983,9 +970,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0xE000):
-         /* NRI  R(N), I         [RI]  */
+         /* NRI  R(N),I         [RI]  */
          /* 01234567 89012345
-            11100RRN I<---->I          */
+            11100RRN I<---->I         */
          Grp = RegGrp(lvl);
          Rfld = (opcode0 & 0x06) + 1;          /* Extract odd register nr */
          Nfld = (opcode0 & 0x01);
@@ -996,7 +983,7 @@ while (reason == 0) {                          /* Loop until halted */
 
          if (Nfld == 0) {                      /* Byte 0(H) */
             Ifld = (Ifld << 8) | 0xF00FF;
-            GR[Rfld][Grp] = GR[Rfld][Grp] & Ifld;    /* AND */
+            GR[Rfld][Grp] = GR[Rfld][Grp] & Ifld;     /* AND */
             /* Update C&Z latches */
             if ((GR[Rfld][Grp] & 0x0FF00) == 0x00000)
                CL_Z[Grp] = ON;
@@ -1014,9 +1001,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0xF000):
-         /* TRM  R(N), I         [RI]  */
+         /* TRM  R(N),I         [RI]  */
          /* 01234567 89012345
-            11110RRN I<---->I          */
+            11110RRN I<---->I         */
          Grp = RegGrp(lvl);
          Rfld = (opcode0 & 0x06) + 1;          /* Extract odd register nr */
          Nfld = (opcode0 & 0x01);
@@ -1039,9 +1026,9 @@ while (reason == 0) {                          /* Loop until halted */
 
    switch (opcode & 0x88FF) {
       case (0x0008):
-         /* LCR  R1(N1), R2(N2)  [RR]  */
+         /* LCR  R1(N1),R2(N2)  [RR]  */
          /* 01234567 89012345
-            0R2N0R1N 00001000          */
+            0R2N0R1N 00001000         */
          Grp = RegGrp(lvl);
          R1fld = ( opcode0 & 0x06) + 1;        /* Extract reg 1 nr */
          N1fld = ( opcode0 & 0x01);
@@ -1078,9 +1065,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x0018):
-         /* ACR  R1(N1), R2(N2)  [RR]  */
+         /* ACR  R1(N1),R2(N2)  [RR]  */
          /* 01234567 89012345
-            0R2N0R1N 00011000          */
+            0R2N0R1N 00011000         */
          Grp = RegGrp(lvl);
          R1fld = ( opcode0 & 0x06) + 1;        /* Extract reg 1 nr */
          R2fld = ((opcode0 & 0x60) >> 4) + 1;  /* Extract reg 2 nr */
@@ -1113,9 +1100,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x0028):
-         /* SCR  R1(N1), R2(N2)  [RR]  */
+         /* SCR  R1(N1),R2(N2)  [RR]  */
          /* 01234567 89012345
-            0R2N0R1N 00101000          */
+            0R2N0R1N 00101000         */
          Grp = RegGrp(lvl);
          R1fld = ( opcode0 & 0x06) + 1;        /* Extract reg 1 nr */
          N1fld = ( opcode0 & 0x01);
@@ -1163,9 +1150,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x0038):
-         /* CCR  R1(N1), R2(N2)  [RR]  */
+         /* CCR  R1(N1),R2(N2)  [RR]  */
          /* 01234567 89012345
-            0R2N0R1N 00111000          */
+            0R2N0R1N 00111000         */
          Grp = RegGrp(lvl);
          R1fld = ( opcode0 & 0x06) + 1;        /* Extract reg 1 nr */
          R2fld = ((opcode0 & 0x60) >> 4) + 1;  /* Extract reg 2 nr */
@@ -1196,9 +1183,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x0048):
-         /* XCR  R1(N1), R2(N2)  [RR]  */
+         /* XCR  R1(N1),R2(N2)  [RR]  */
          /* 01234567 89012345
-            0R2N0R1N 01001000          */
+            0R2N0R1N 01001000         */
          Grp = RegGrp(lvl);
          R1fld = ( opcode0 & 0x06) + 1;        /* Extract odd reg 1 nr */
          R2fld = ((opcode0 & 0x60) >> 4) + 1;  /* Extract odd reg 2 nr */
@@ -1231,9 +1218,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x0058):
-         /* OCR  R1(N1), R2(N2)  [RR]  */
+         /* OCR  R1(N1),R2(N2)  [RR]  */
          /* 01234567 89012345
-            0R2N0R1N 01011000          */
+            0R2N0R1N 01011000         */
          Grp = RegGrp(lvl);
          R1fld = ( opcode0 & 0x06) + 1;        /* Extract odd reg 1 nr */
          N1fld = ( opcode0 & 0x01);
@@ -1266,9 +1253,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x0068):
-         /* NCR  R1(N1), R2(N2)  [RR]  */
+         /* NCR  R1(N1),R2(N2)  [RR]  */
          /* 01234567 89012345
-            0R2N0R1N 01101000          */
+            0R2N0R1N 01101000         */
          Grp = RegGrp(lvl);
          R1fld = ( opcode0 & 0x06) + 1;        /* Extract odd reg 1 nr */
          R2fld = ((opcode0 & 0x60) >> 4) + 1;  /* Extract odd reg 2 nr */
@@ -1301,9 +1288,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x0078):
-         /* LCOR R1(N1), R2(N2)  [RR]  */
+         /* LCOR R1(N1),R2(N2)  [RR]  */
          /* 01234567 89012345
-            0R2N0R1N 01111000          */
+            0R2N0R1N 01111000         */
          Grp = RegGrp(lvl);
          R1fld = ( opcode0 & 0x06) + 1;        /* Extract odd reg 1 nr */
          R2fld = ((opcode0 & 0x60) >> 4) + 1;  /* Extract odd reg 2 nr */
@@ -1335,9 +1322,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x0010):
-         /* ICT  R(N), B         [RSA] */
+         /* ICT  R(N),B         [RSA] */
          /* 01234567 89012345
-            0BBB0RRN 00010000          */
+            0BBB0RRN 00010000         */
          Grp = RegGrp(lvl);
          Bfld = (opcode0 >> 4) & 0x007;
          Rfld = (opcode0 & 0x06) + 1;          /* Extract odd register nr */
@@ -1354,9 +1341,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x0030):
-         /* STCT R(N), B         [RSA] */
+         /* STCT R(N),B         [RSA] */
          /* 01234567 89012345
-            0BBB0RRN 00110000          */
+            0BBB0RRN 00110000         */
          Grp = RegGrp(lvl);
          Bfld = (opcode0 >> 4) & 0x007;
          Rfld = (opcode0 & 0x06) + 1;          /* Extract odd register nr */
@@ -1374,9 +1361,9 @@ while (reason == 0) {                          /* Loop until halted */
 
    switch (opcode & 0x8880) {
       case (0x0800):
-         /* IC   R(N), D(B)      [RS]  */
+         /* IC   R(N),D(B)      [RS]  */
          /* 01234567 89012345
-            0BBB1RRN 0D<--->D          */
+            0BBB1RRN 0D<--->D         */
          Grp = RegGrp(lvl);
          Bfld = (opcode0 >> 4) & 0x007;
          Rfld = (opcode0 & 0x06) + 1;          /* Extract odd register nr */
@@ -1389,9 +1376,9 @@ while (reason == 0) {                          /* Loop until halted */
             addr = GR[Bfld][Grp] + Dfld;
          w_byte = GetMem(addr);
 
-         if (Nfld == 0) {                      /* Byte 0(H) */
+         if (Nfld == 0)                        /* Byte 0(H) */
             GR[Rfld][Grp] = (GR[Rfld][Grp] & 0xF00FF) | (w_byte << 8);
-         } else                                /* Byte 1(L) */
+         else                                  /* Byte 1(L) */
             GR[Rfld][Grp] = (GR[Rfld][Grp] & 0x3FF00) | w_byte;
 
          /* Test the selected byte (w_byte) */
@@ -1402,7 +1389,7 @@ while (reason == 0) {                          /* Loop until halted */
          /* Determine if nr of bits is odd or even and set C latch accordingly */
          j = 0;
          for (i = 8; i != 0; i--) {
-            j += w_byte & 0x01;                /* Count nr of one bits */
+            j += w_byte & 0x01;                /* Count the one bits */
             w_byte >>= 1;
          }
          if (j == 0 | j == 2 | j == 4 | j == 6 | j == 8)
@@ -1412,9 +1399,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x0880):
-         /* STC  R(N), D(B)      [RS]  */
+         /* STC  R(N),D(B)      [RS]  */
          /* 01234567 89012345
-            0BBB1RRN 1D<--->D          */
+            0BBB1RRN 1D<--->D         */
          Grp = RegGrp(lvl);
          Bfld = (opcode0 >> 4) & 0x07;
          Dfld = (opcode1) & 0x7F;
@@ -1436,9 +1423,9 @@ while (reason == 0) {                          /* Loop until halted */
 
    switch (opcode & 0x8881) {
       case (0x0001):
-         /* LH   R, D(B)         [RS]  */
+         /* LH   R,D(B)         [RS]  */
          /* 01234567 89012345
-            0BBB0RRR 0D<-->D1          */
+            0BBB0RRR 0D<-->D1         */
          Grp = RegGrp(lvl);
          Bfld = (opcode0 >> 4) & 0x007;
          Dfld = (opcode1) & 0x7E;
@@ -1453,9 +1440,8 @@ while (reason == 0) {                          /* Loop until halted */
          w_byte = GetMem(addr) << 8;
          addr++;
          w_byte = w_byte | GetMem(addr);
-         GR[Rfld][Grp] = w_byte;               /* X-byte = 0  */
-         old_CRC_reg = w_byte;                 /* See PoO 5-6 */
-         if (Rfld == 0) break;                 /* New IAR !   */
+         GR[Rfld][Grp] = w_byte;               /* X-byte = 0 */
+         if (Rfld == 0) break;                 /* New IAR ! */
 
          /* Update C&Z latches */
          if (w_byte == 0x0000) {
@@ -1468,9 +1454,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x0081):
-         /* STH  R, D(B)         [RS]  */
+         /* STH  R,D(B)         [RS]  */
          /* 01234567 89012345
-            0BBB0RRR 1D<-->D1          */
+            0BBB0RRR 1D<-->D1         */
          Grp = RegGrp(lvl);
          Bfld = (opcode0 >> 4) & 0x007;
          Rfld = (opcode0) & 0x007;             /* Extract register nr */
@@ -1495,9 +1481,9 @@ while (reason == 0) {                          /* Loop until halted */
 
    switch (opcode & 0x8883) {
       case (0x0002):
-         /* L    R, D(B)         [RS]  */
+         /* L    R,D(B)         [RS]  */
          /* 01234567 89012345
-            0BBB0RRR 0D<->D10          */
+            0BBB0RRR 0D<->D10         */
          Grp = RegGrp(lvl);
          Bfld = (opcode0 >> 4) & 0x007;
          Dfld = (opcode1) & 0x7C;              /* Dfld at fullword boundary */
@@ -1526,9 +1512,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x0082):
-         /* ST   R, D(B)         [RS]  */
+         /* ST   R,D(B)         [RS]  */
          /* 01234567 89012345
-            0BBB0RRR 1D<->D10          */
+            0BBB0RRR 1D<->D10         */
          Grp = RegGrp(lvl);
          Bfld = (opcode0 >> 4) & 0x007;
          Dfld = (opcode1) & 0x7C;              /* Dfld at fullword boundary */
@@ -1557,9 +1543,9 @@ while (reason == 0) {                          /* Loop until halted */
 
    switch (opcode & 0x88FF) {
       case (0x0080):
-         /* LHR  R1, R2          [RR]  */
+         /* LHR  R1,R2          [RR]  */
          /* 01234567 89012345
-            0R2R0R1R 10000000          */
+            0R2R0R1R 10000000         */
          Grp = RegGrp(lvl);
          R2fld = ((opcode0 & 0x70) >> 4);      /* Extract register 2 */
          R1fld = ( opcode0 & 0x07);            /* Extract register 1 */
@@ -1580,9 +1566,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x0090):
-         /* AHR  R1, R2          [RR]  */
+         /* AHR  R1,R2          [RR]  */
          /* 01234567 89012345
-            0R2R0R1R 10001000          */
+            0R2R0R1R 10001000         */
          Grp = RegGrp(lvl);
          R2fld = ((opcode0 & 0x70) >> 4);      /* Extract register 2 */
          R1fld = ( opcode0 & 0x007);           /* Extract register 1 */
@@ -1603,9 +1589,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x00A0):
-         /* SHR  R1, R2          [RR]  */
+         /* SHR  R1,R2          [RR]  */
          /* 01234567 89012345
-            0R2R0R1R 10011000          */
+            0R2R0R1R 10011000         */
          Grp = RegGrp(lvl);
          R2fld = ((opcode0 & 0x70) >> 4);      /* Extract register 2 */
          R1fld = ( opcode0 & 0x007);           /* Extract register 1 */
@@ -1626,9 +1612,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x00B0):
-         /* CHR  R1, R2          [RR]  */
+         /* CHR  R1,R2          [RR]  */
          /* 01234567 89012345
-            0R2R0R1R 10110000          */
+            0R2R0R1R 10110000         */
          Grp = RegGrp(lvl);
          R2fld = ((opcode0 & 0x70) >> 4);      /* Extract register 2 */
          R1fld = ( opcode0 & 0x007);           /* Extract register 1 */
@@ -1646,9 +1632,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x00C0):
-         /* XHR  R1, R2          [RR]  */
+         /* XHR  R1,R2          [RR]  */
          /* 01234567 89012345
-            0R2R0R1R 11000000          */
+            0R2R0R1R 11000000         */
          Grp = RegGrp(lvl);
          R2fld = ((opcode0 & 0x70) >> 4);      /* Extract register 2 */
          R1fld = ( opcode0 & 0x007);           /* Extract register 1 */
@@ -1669,9 +1655,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x00D0):
-         /* OHR  R1, R2          [RR]  */
+         /* OHR  R1,R2          [RR]  */
          /* 01234567 89012345
-            0R2R0R1R 11010000          */
+            0R2R0R1R 11010000         */
          Grp = RegGrp(lvl);
          R2fld = ((opcode0 & 0x70) >> 4);      /* Extract register 2 */
          R1fld = ( opcode0 & 0x007);           /* Extract register 1 */
@@ -1692,9 +1678,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x00E0):
-         /* NHR  R1, R2          [RR]  */
+         /* NHR  R1,R2          [RR]  */
          /* 01234567 89012345
-            0R2R0R1R 11100000          */
+            0R2R0R1R 11100000         */
          Grp = RegGrp(lvl);
          R2fld = ((opcode0 & 0x70) >> 4);      /* Extract register 2 */
          R1fld = ( opcode0 & 0x007);           /* Extract register 1 */
@@ -1715,9 +1701,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x00F0):
-         /* LHOR R1, R2          [RR]  */
+         /* LHOR R1,R2          [RR]  */
          /* 01234567 89012345
-            0R2R0R1R 11110000          */
+            0R2R0R1R 11110000         */
          Grp = RegGrp(lvl);
          R2fld = ((opcode0 & 0x70) >> 4);      /* Extract register 2 */
          R1fld = ( opcode0 & 0x007);           /* Extract register 1 */
@@ -1738,9 +1724,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x0088):
-         /* LR   R1, R2          [RR]  */
+         /* LR   R1,R2          [RR]  */
          /* 01234567 89012345
-            0R2R0R1R 10001000          */
+            0R2R0R1R 10001000         */
          Grp = RegGrp(lvl);
          R2fld = ((opcode0 & 0x70) >> 4);      /* Extract register 2 */
          R1fld = ( opcode0 & 0x007);           /* Extract register 1 */
@@ -1760,9 +1746,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x0098):
-         /* AR   R1, R2          [RR]  */
+         /* AR   R1,R2          [RR]  */
          /* 01234567 89012345
-            0R2R0R1R 10011000          */
+            0R2R0R1R 10011000         */
          Grp = RegGrp(lvl);
          R2fld = ((opcode0 & 0x70) >> 4);      /* Extract register 2 */
          R1fld = ( opcode0 & 0x007);           /* Extract register 1 */
@@ -1776,16 +1762,16 @@ while (reason == 0) {                          /* Loop until halted */
          CL_C[Grp] = OFF;
          CL_Z[Grp] = OFF;
          /* Update C&Z latches */
-         if (w_byte & 0x40000)                 /* Bit 19 overflow ? */
+         if (w_byte & 0x40000)                /* Bit 21 overflow ? */
             CL_C[Grp] = ON;
          if (GR[R1fld][Grp] == 0x00000)
             CL_Z[Grp] = ON;
          break;
 
       case (0x00A8):
-         /* SR   R1, R2          [RR]  */
+         /* SR   R1,R2          [RR]  */
          /* 01234567 89012345
-            0R2R0R1R 10101000          */
+            0R2R0R1R 10101000         */
          Grp = RegGrp(lvl);
          R2fld = ((opcode0 & 0x70) >> 4);      /* Extract register 2 */
          R1fld = ( opcode0 & 0x007);           /* Extract register 1 */
@@ -1799,16 +1785,16 @@ while (reason == 0) {                          /* Loop until halted */
          CL_C[Grp] = OFF;
          CL_Z[Grp] = OFF;
          /* Update C&Z latches */
-         if (w_byte & 0x40000)                 /* X-byte included */
+         if (w_byte & 0x40000)                /* X-byte included */
             CL_C[Grp] = ON;
          if (GR[R1fld][Grp] == 0x00000)
             CL_Z[Grp] = ON;
          break;
 
       case (0x00B8):
-         /* CR   R1, R2          [RR]  */
+         /* CR   R1,R2          [RR]  */
          /* 01234567 89012345
-            0R2R0R1R 10110000          */
+            0R2R0R1R 10110000         */
          Grp = RegGrp(lvl);
          R2fld = ((opcode0 & 0x70) >> 4);      /* Extract register 2 */
          R1fld = ( opcode0 & 0x007);           /* Extract register 1 */
@@ -1816,7 +1802,7 @@ while (reason == 0) {                          /* Loop until halted */
          CL_C[Grp] = OFF;
          CL_Z[Grp] = OFF;
 
-         /* Test if R1 is < R2 */
+         /* Test if R1 is < R2 */                           /* CR */
          if (GR[R1fld][Grp] == GR[R2fld][Grp]) /* Compare for equal */
             CL_Z[Grp] = ON;
          if (GR[R1fld][Grp] < GR[R2fld][Grp])  /* Compare for less */
@@ -1828,9 +1814,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x00C8):
-         /* XR   R1, R2          [RR]  */
+         /* XR   R1,R2          [RR]  */
          /* 01234567 89012345
-            0R2R0R1R 11001000          */
+            0R2R0R1R 11001000         */
          Grp = RegGrp(lvl);
          R2fld = ((opcode0 & 0x70) >> 4);      /* Extract register 2 */
          R1fld = ( opcode0 & 0x007);           /* Extract register 1 */
@@ -1850,9 +1836,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x00D8):
-         /* OR   R1, R2          [RR]  */
+         /* OR   R1,R2          [RR]  */
          /* 01234567 89012345
-            0R2R0R1R 11011000          */
+            0R2R0R1R 11011000         */
          Grp = RegGrp(lvl);
          R2fld = ((opcode0 & 0x70) >> 4);      /* Extract register 2 */
          R1fld = ( opcode0 & 0x007);           /* Extract register 1 */
@@ -1872,9 +1858,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x00E8):
-         /* NR   R1, R2          [RR]  */
+         /* NR   R1,R2          [RR]  */
          /* 01234567 89012345
-            0R2R0R1R 11101000          */
+            0R2R0R1R 11101000         */
          Grp = RegGrp(lvl);
          R2fld = ((opcode0 & 0x70) >> 4);      /* Extract register 2 */
          R1fld = ( opcode0 & 0x007);           /* Extract register 1 */
@@ -1894,9 +1880,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x00F8):
-         /* LOR  R1, R2          [RR]  */
+         /* LOR  R1,R2          [RR]  */
          /* 01234567 89012345
-            0R2R0R1R 11111000          */
+            0R2R0R1R 11111000         */
          Grp = RegGrp(lvl);
          R2fld = ((opcode0 & 0x70) >> 4);      /* Extract register 2 */
          R1fld = ( opcode0 & 0x007);           /* Extract register 1 */
@@ -1918,9 +1904,9 @@ while (reason == 0) {                          /* Loop until halted */
          break;
 
       case (0x0040):
-         /* BALR R1, R2          [RR]  */
+         /* BALR R1,R2          [RR]  */
          /* 01234567 89012345
-            0R2R0R1R 01000000          */
+            0R2R0R1R 01000000         */
          Grp = RegGrp(lvl);
          R2fld = ((opcode0 & 0x70) >> 4);      /* Extract register 2 */
          R1fld = ( opcode0 & 0x007);           /* Extract register 1 */
@@ -1935,22 +1921,21 @@ while (reason == 0) {                          /* Loop until halted */
 
    switch (opcode & 0x880F) {
       case (0x000C):
-         /* IN   R, E            [RE]  */
+         /* IN   R,E            [RE]  */
          /* 01234567 89012345
-            0EEE0RRR EEEE1100          */
+            0EEE0RRR EEEE1100         */
          Grp = RegGrp(lvl);
          Efld = (opcode0  & 0x70) | (opcode1 >> 4);
          Rfld = (opcode0) & 0x007;             /* Extract register nr */
 
-         /* I/O instruction in level 5 ? */
-         if (lvl == 5) {
-            IO_L5_chk = ON;                    /* Check: I/O instr in lvl 5 ! */
+         if (lvl == 5) {   // && (test_mode == OFF)) {
+            IO_L5_chk = ON;                    /* Check: I/O instr in level 5 ! */
             break;
          }
          if (Efld < 0x20) {                    /* Input from GR's ? */
             GR[Rfld][Grp] = GR[Efld & 0x007][Efld >> 3];
          } else {
-            /* An Input x'40' will reset L2 request */
+            // An Input x'40' will reset L2 req
             if ((Efld == 0x40) && (lvl == 2)) {
                Eregs_Inp[0x40] = abar;         /* Moved - Echo abar */
                Eregs_Inp[0x77] &= ~0x4000;     /* Reset L2 flag */
@@ -1973,34 +1958,33 @@ while (reason == 0) {                          /* Loop until halted */
             }
 
 // ***      Eregs_Inp[0x70]  = 0x4000;         // 64kbyte storage size (3704)
-            Eregs_Inp[0x70]  = 0x0400;         // 64kbyte storage size (3705)
-            Eregs_Inp[0x70] |= 0x0001;         // 18 bits extended addr installed
+            Eregs_Inp[0x70]  = 0x0400;   // 64kbyte storage size (3705)
+            Eregs_Inp[0x70] |= 0x0001;   // 20 bits extended addr installed
 
 // ***      Eregs_Inp[0x71] is updated by panel.c
 // ***      Eregs_Inp[0x72] is updated by panel.c
 
-            Eregs_Inp[0x74]  = LAR;            // Update LAR
+            Eregs_Inp[0x74]  = LAR;      // Update LAR
 
 // ***      Eregs_Inp[0x77] is updated by chan.T1.c
 
-            Eregs_Inp[0x79]  = 0x0000;         // Reset all bits in reg 0x79
-            Eregs_Inp[0x79] |= 0x0008;         // Fet storage installed
-// ***      Eregs_Inp[0x79] |= 0x0004;         // 0 = 3705, 1 = 3704
-            Eregs_Inp[0x79] |= 0x0001;         // CE IPL escape jumper NOT installed
+            Eregs_Inp[0x79]  = 0x0000;   // Reset all bits in reg 0x79
+            Eregs_Inp[0x79] |= 0x0008;   // Fet storage installed
+// ***      Eregs_Inp[0x79] |= 0x0004;   // 0 = 3705, 1 = 3704
+            Eregs_Inp[0x79] |= 0x0001;   // CE IPL escape jumper NOT installed
             if (CL_C[3] == ON) Eregs_Inp[0x79] |= 0x0200;  // L5 C & Z flags
             if (CL_Z[3] == ON) Eregs_Inp[0x79] |= 0x0100;
 
-            Eregs_Inp[0x7B] = 0x0000;          // Good BSC CRC.
-//            Eregs_Inp[0x7C] = CRC_sdlc(old_CRC_reg, CRC_data_reg); // Calc CRC. (for hw sdlc)
-            Eregs_Inp[0x7C] = 0xF0B8;          // Good SDLC CRC. (for sw sdlc)
+            Eregs_Inp[0x7B] = 0x0000;    // Good BSC CRC.
+            Eregs_Inp[0x7C] = 0xF0B8;    // Good SDLC CRC.
 
-            Eregs_Inp[0x7E] = 0x0000;          // Reset all bits in reg 0x7E
+            Eregs_Inp[0x7E] = 0x0000;    // Reset all bits in reg 0x7E
             if (adr_ex_chk)  Eregs_Inp[0x7E]  |= 0x0040;   // Address exception check
             if (IO_L5_chk)   Eregs_Inp[0x7E]  |= 0x0020;   // I/O instr in L5
             if (OP_reg_chk)  Eregs_Inp[0x7E]  |= 0x0008;   // OPC check
             if (ipl_req_L1)  Eregs_Inp[0x7E]  |= 0x0002;   // IPL L1 request
 
-            Eregs_Inp[0x7F] = 0x0000;          // Reset all bits in reg 0x7F
+            Eregs_Inp[0x7F] = 0x0000;    // Reset all bits in reg 0x7F
             if (diag_req_L2) Eregs_Inp[0x7F]  |= 0x8000;   // Diagnostic L2 request
             if (inter_req_L3) Eregs_Inp[0x7F] |= 0x0200;   // Panel Interrupt L3
             if (pci_req_L4) Eregs_Inp[0x7F]   |= 0x0100;   // PCI L4 request
@@ -2008,36 +1992,35 @@ while (reason == 0) {                          /* Loop until halted */
             if (pci_req_L3) Eregs_Inp[0x7F]   |= 0x0002;   // PCI L3 request
             if (svc_req_L4) Eregs_Inp[0x7F]   |= 0x0001;   // SVC L4 request
 
-            GR[Rfld][Grp] = Eregs_Inp[Efld];   // <<=== !!! Finally update general reg.
+            GR[Rfld][Grp] = Eregs_Inp[Efld];      // <<==== !!!!
          }
          break;
 
       case (0x0004):
-         /* OUT  R, E            [RE]  */
+         /* OUT  R,E            [RE]  */
          /* 01234567 89012345
-            0EEE0RRR EEEE0100          */
+            0EEE0RRR EEEE0100         */
          Grp = RegGrp(lvl);
          Efld = (opcode0  & 0x70) | (opcode1 >> 4);
-         Rfld = (opcode0) & 0x007;             // Extract register nr
+         Rfld = (opcode0) & 0x007;             /* Extract register nr */
 
          if (lvl == 5) {
-            IO_L5_chk = ON;                    // I/O instr in L5
+            IO_L5_chk = ON;            // I/O instr in L5
             break;
          }
-         CRC_data_reg = GR[Rfld][Grp] & 0x00FF;  // See PoO 5-6 (CRC)
-         if (Efld < 0x20) {                    // Output to GR's ?
-            if (Rfld == 0) break;              // Only regen of regs parity
+         if (Efld < 0x20) {            // Output to GR's ?
+            if (Rfld == 0) break;      // Only regen of regs parity
             GR[Efld & 0x007][Efld >> 3] = GR[Rfld][Grp];
          } else {
-            Eregs_Out[Efld] = GR[Rfld][Grp];   // <<=== !!! Finally update I/O reg.
+            Eregs_Out[Efld] = GR[Rfld][Grp];   // <<==== !!! Finally update I/O reg.
 
 #if 0  // <=== !!!
 
             if ((Efld >= 0x40) && (Efld <= 0x47)) {
                // Eregs_Out 44, 45, 46, 47 ===> ICW Local Store
-               Get_ICW(0x20);                  // abar must be temp 0x20
-               Eregs_Out[Efld] = GR[Rfld][Grp];    // Update any ICW byte
-               Put_ICW(0x20);                  // abar must be temp 0x20
+               Get_ICW(0x20);          // abar must be temp 0x20
+               Eregs_Out[Efld] = GR[Rfld][Grp];  // Update any ICW byte
+               Put_ICW(0x20);          // abar must be temp 0x20
             }
 #endif
             //********************************************************
@@ -2046,30 +2029,31 @@ while (reason == 0) {                          /* Loop until halted */
             if ((Efld >= 0x40) && Efld <= 0x47) {  // Addressing CS2 ICW regs ?
                // Obtain ICW update lock
                pthread_mutex_lock(&icw_lock);
-            }
-            if ((Efld == 0x40) && ((lvl == 3) || (lvl == 4))) {
-               // Update ABAR CS2 and update ICW[ABAR] (only when in L3 or L4).
-               abar = Eregs_Out[0x40];
-               tbar = (abar - 0x0840) >> 1;    // Get ICW table ptr from abar
-debug_reg = 0x60;              // Very very very temp HJS
-            }
-            if (Efld == 0x44) {                // ICW SCF & PDF
-               icw_scf[tbar] = (Eregs_Out[0x44] >> 8) & 0x4F;   // Only Serv Req, DCD & Pgm Flag
-               icw_pdf[tbar] =  Eregs_Out[0x44] & 0x00FF;
-               if (icw_pcf[0] != 0x07)         // TEMP
-                  icw_pdf_reg = FILLED;        // PDF is filled for tx
-            }
-            if (Efld == 0x45) {                // ICW LCD & PCF
-               icw_lcd[tbar] = (Eregs_Out[0x45] >> 4) & 0x0F;
-               icw_pcf_new =  Eregs_Out[0x45] & 0x0F;
-               icw_pcf_mod = 0x01;             // Indicate PCF updated
-            }
+
+               if ((Efld == 0x40) && ((lvl == 3) || (lvl == 4))) {
+                  // Update ABAR CS2 and update ICW[ABAR] (only when in L3 or L4).
+                  abar = Eregs_Out[0x40];
+                  tbar = (abar - 0x0840) >> 1; // Get ICW table ptr from abar
+debug_reg = 0x63;                 // Very very very temp HJS
+               }
+               if (Efld == 0x44) {             // ICW SCF & PDF
+                  icw_scf[tbar] = (Eregs_Out[0x44] >> 8) & 0x4E;   // Only Serv Req, DCD & Pgm Flag
+                  icw_pdf[tbar] =  Eregs_Out[0x44] & 0x00FF;
+                  if (icw_pcf[0] != 0x07)               // TEMP
+                     icw_pdf_reg = FILLED;     // PDF is filled for tx
+               }
+               if (Efld == 0x45) {             // ICW LCD & PCF
+                  icw_lcd[tbar] = (Eregs_Out[0x45] >> 4) & 0x0F;
+                  icw_pcf_new =  Eregs_Out[0x45] & 0x0F;
+                  icw_pcf_mod = 0x01;          // indicate pcf updated
+               }
                                                // ICW SDF
-            if (Efld == 0x46) icw_sdf[tbar]    = (Eregs_Out[0x46] >> 2) & 0xFF;
-                                               // ICW 34 - 43
-            if (Efld == 0x47) icw_Rflags[tbar] = (Eregs_Out[0x47] << 6) & 0x3DF0;
-            // Release ICW update lock.
-            pthread_mutex_unlock(&icw_lock);
+               if (Efld == 0x46) icw_sdf[tbar]    = (Eregs_Out[0x46] >> 2) & 0xFF;
+                                               // ICW 34 - 45
+               if (Efld == 0x47) icw_Rflags[tbar] = (Eregs_Out[0x47] << 4) & 0x0070;
+               // Release ICW update lock.
+               pthread_mutex_unlock(&icw_lock);
+            }
 
             //********************************************************
             //          Channel Adaptor Type 2 updates
@@ -2099,10 +2083,10 @@ debug_reg = 0x60;              // Very very very temp HJS
                }
                if (Eregs_Out[0x57] & 0x0008) { // Test for CA select
                   Eregs_Inp[0x55] |= 0x0001;   // Select CA1
-                  Eregs_Inp[0x55] &= ~0x0002;  // Deselect CA2
+                  Eregs_Inp[0x55] &= ~0x0002;  // deselect CA2
                }  else {
                   Eregs_Inp[0x55] |= 0x0002;   // Select CA2
-                  Eregs_Inp[0x55] &= ~0x0001;  // Deselect CA1
+                  Eregs_Inp[0x55] &= ~0x0001;  // deselect CA1
                }
                if (Eregs_Out[0x57] & 0x0100) { // Test for IPL required
                   Eregs_Out[0x53] |= 0x0200;   // Set not initialized sense
@@ -2162,24 +2146,24 @@ debug_reg = 0x60;              // Very very very temp HJS
                   Eregs_Out[0x53] &= ~0x0200;  // Reset not-initialized flag
                   ipl_req_L1 = OFF;
                }
-               if (w_byte & 0x0004)            // Reset all L1 prgm checks
+               if (w_byte & 0x0004)      // Reset all L1 prgm checks
                   IO_L5_chk = OP_reg_chk = adr_ex_chk = OFF;
-               if (w_byte & 0x2000)            // Reset Panel Interrupt L3 ?
+               if (w_byte & 0x2000)      // Reset Panel Interrupt L3 ?
                   inter_req_L3 = OFF;
                if ((w_byte &0x0200) && (test_mode))  // Set Diagnostic mode L2 ?
                   diag_req_L2 = ON;
                if ((w_byte &0x0100) && (test_mode))  // Reset Diagnostic mode L2 ?
                   diag_req_L2 = OFF;
-               if (w_byte & 0x0040)            // Reset Interval Timer L3 ?
+               if (w_byte & 0x0040)      // Reset Interval Timer L3 ?
                   timer_req_L3 = OFF;
-               if (w_byte & 0x0020)            // Reset PCI L3 ?
+               if (w_byte & 0x0020)      // Reset PCI L3 ?
                   pci_req_L3 = OFF;
-               if (w_byte & 0x0002)            // Reset PCI L4 ?
+               if (w_byte & 0x0002)      // Reset PCI L4 ?
                   pci_req_L4 = OFF;
-               if (w_byte & 0x0001)            // Reset SVC L4 ?
+               if (w_byte & 0x0001)      // Reset SVC L4 ?
                   svc_req_L4 = OFF;
             }
-            if (Efld == 0x79) {                // Utility Control
+            if (Efld == 0x79) {          // Utility Control
                if (!(Eregs_Out[Efld] & 0x0400)) { // Inhibit bit PL5 C&Z flag off ?
                   if (Eregs_Out[Efld] & 0x0200)   // Prog L5 C flag
                      CL_C[3] = ON;
@@ -2233,9 +2217,9 @@ debug_reg = 0x60;              // Very very very temp HJS
 
    switch (opcode & 0xF8F0) {
       case (0xB800):
-         /* BAL  R, A            [RA]  */
+         /* BAL  R,A            [RA]  */
          /* 01234567 89012345 ... 901
-            10111RRR 0000A<-- // -->A  */
+            10111RRR 0000A<-- // -->A */
          Grp = RegGrp(lvl);
          Rfld = (opcode0) & 0x07;              /* Extract register nr */
                                                /* Get branch addr from memory */
@@ -2251,9 +2235,9 @@ debug_reg = 0x60;              // Very very very temp HJS
          break;
 
       case (0xB820):
-         /* LA   R, A            [RA]  */
+         /* LA   R,A            [RA]  */
          /* 01234567 89012345 ... 901
-            10111RRR 0010A<-- // -->A  */
+            10111RRR 0010A<-- // -->A */
          Grp = RegGrp(lvl);
          Rfld = (opcode0) & 0x007;             /* Extract register nr */
                                                /* Get load address from memory */
@@ -2297,8 +2281,8 @@ return (reason);
 
 /*** Select register group ***/
 
-int32 RegGrp(int32 level) {
-                             // Lvl 1 => Reg Grp 0
+int32 RegGrp(int32 level)
+{                            // Lvl 1 => Reg Grp 0
    if (level == 1)           // Lvl 2 => Reg Grp 0
       return(0);             // Lvl 3 => Reg Grp 1
    else                      // Lvl 4 => Reg Grp 2
@@ -2307,10 +2291,11 @@ int32 RegGrp(int32 level) {
 
 /*** Fetch a byte from memory ***/
 
-int32 GetMem(int32 addr) {
+int32 GetMem(int32 addr)
+{
    if (addr > MEMSIZE) {
        adr_ex_chk = ON;       // Addressing Exception ?
-        printf("Addr %d  MEMSIZE %d ... \n\r", addr, MEMSIZE);
+        printf("Addr %d  MEMSIZE %d ... \n\r",addr, MEMSIZE);
     }
    else
       return(M[addr] & 0xFF);
@@ -2318,10 +2303,11 @@ int32 GetMem(int32 addr) {
 
 /*** Place a byte in memory ***/
 
-int32 PutMem(int32 addr, int32 data) {
+int32 PutMem(int32 addr, int32 data)
+{
    if (addr > MEMSIZE) {
       adr_ex_chk = ON;       // Addressing Exception ?
-         printf("Addr %d  MEMSIZE %d ... \n\r", addr, MEMSIZE);
+         printf("Addr %d  MEMSIZE %d ... \n\r",addr, MEMSIZE);
       }
    else
       M[addr] = data & 0xFF;
@@ -2358,22 +2344,7 @@ t_stat cpu_set_size (UNIT *uptr, int32 val, char *cptr, void *desc) {
    return SCPE_OK;
 }
 
-/*** Calculate SDLC CRC ***/
-
-uint16 CRC_sdlc(int crc, unsigned char add_char) {
-   unsigned int i;
-
-   crc ^= add_char;
-   for (i = 0; i < 8; ++i) {           // For all 8 bits
-      if (crc & 0x0001)
-         crc = (crc >> 1) ^ 0x8408;    // IBM Polynomial (0x1021)
-      else
-         crc = (crc >> 1);
-   }
-   return crc;
-}
-
-/*** BOOT/LOAD pressed procedure ***/
+/*** BOOT/LOAD procedure ***/
 
 t_stat cpu_boot (int32 unitno, DEVICE *dptr) {    /* LOAD pressed */
    //******************************************************************
@@ -2459,24 +2430,26 @@ t_stat cpu_boot (int32 unitno, DEVICE *dptr) {    /* LOAD pressed */
 
    if (Eregs_Inp[0x79] & 0x0002) {
       /* If CA Type 1 or 4 Load miniROS at location 0x0000 */
-      printf("Loading MiniROS...\n\r");
+      printf("CPU: Loading MiniROS...\n\r");
       for (addr = 0x0000; addr < 0x0200; addr++) {
          temp = miniROS[addr];
          PutMem(addr, temp);
       }
    } else {
       /* If CA Type 2 or 3 Load maxiROS at location 0x0000 */
-      printf("Loading MaxiROS...\n\r");
+      printf("CPU: Loading MaxiROS...\n\r");
       for (addr = 0x0000; addr < 0x0200; addr++) {
          temp = maxiROS[addr];
          PutMem(addr, temp);
       }
    }
 
+   /* Load IFL3705E at location 0x0700 */
+
    //******************************************************************
    // IPL phase 3 - Bootstrap load
    //******************************************************************
-   printf("Boot CCU... \n\r");
+   printf("CPU: Booting... \n\r");
    int_lvl_mask[1] = OFF;                      /* Allow pgm level 1 */
    ipl_req_L1 = ON;                            /* Request L1 for IPL */
    return SCPE_OK;
@@ -2489,19 +2462,19 @@ t_stat cpu_reset (DEVICE *dptr) {              /* RESET pressed */
    // IPL phase 1 - CCU reset procedure
    //******************************************************************
    int32 i;
-   sim_brk_types = sim_brk_dflt = SWMASK('E'); /* clear all BP's */
+   sim_brk_types = sim_brk_dflt = SWMASK ('E');  /* Clear all BP's */
 
-   /* Clear all level 0 GP registers */
+   /* Clear all level GP registers */
    GR[0][0] = 0x00000;  GR[1][0] = 0x00000;  GR[2][0] = 0x00000;  GR[3][0] = 0x00000;
    GR[4][0] = 0x00000;  GR[5][0] = 0x00000;  GR[6][0] = 0x00000;  GR[7][0] = 0x00000;
 
    /* Set/reset HARD STOP, PGM STOP, IPL LATCHES 1 & 2, TEST MODE */
-   test_mode  = ON;                            /* See PoO 5-11 */
-   pgm_stop   = OFF;
+   test_mode = ON;                             /* See PoO 5-11 */
+   pgm_stop  = OFF;
    load_state = OFF;
    wait_state = OFF;
    OP_reg_chk = OFF;
-   IO_L5_chk  = OFF;
+   IO_L5_chk = OFF;
 
    /* Reset all interrupt level flags */
    for (i = 0; i < 6; i++) {
@@ -2511,7 +2484,8 @@ t_stat cpu_reset (DEVICE *dptr) {              /* RESET pressed */
    }
    lvl = 5;
 
-   printf("Reset CCU... \n\r");
-   printf("CPU MEMORYSIZE %d bytes \n\r", MEMSIZE);
+   printf("CPU: Reset... \n\r");
+   printf("CPU: MEMORYSIZE %d bytes... \n\r", MEMSIZE);
+
    return SCPE_OK;
 }
