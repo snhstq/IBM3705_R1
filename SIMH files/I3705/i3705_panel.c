@@ -581,7 +581,7 @@ while (1) {
    rc = read(rpfd, ibuf, sizeof(ibuf));
    if (rc > 0) {
       printf("PNL: received %d bytes from panel\n\r", rc);
-      printf("PNL: received %02x, %02X, %02X, %02X, %02X\n\r", ibuf[0], ibuf[1], ibuf[2], ibuf[3], ibuf[4]);
+      printf("PNL: received %02X, %02X, %02X, %02X, %02X\n\r", ibuf[0], ibuf[1], ibuf[2], ibuf[3], ibuf[4]);
    len = 0;
    buf[0] = '\0';
    strcat(buf, "\xF1\x03");
