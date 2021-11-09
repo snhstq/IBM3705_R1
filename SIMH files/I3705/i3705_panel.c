@@ -48,7 +48,6 @@
 #include <ifaddrs.h>
 #include <sys/time.h>
 #include <sys/syscall.h>
-#include <wiringPi.h>
 #include "i3705_defs.h"
 #include "i3705_Eregs.h"                      /* Exernal regs defs */
 #include "i3705_i2c_defs.h"
