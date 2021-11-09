@@ -181,9 +181,6 @@ void *PNL_thread(void *arg) {
    signal (SIGALRM, sig_handler);      /* Interval timer */
    timer_msec(100);                    // <=== sets the 3705 interval timer
 
-  // int start_bton = RELEASED, stop_bton = RELEASED;
-  // int inter_bton = RELEASED, load_bton = RELEASED;
-  // int setad_bton = RELEASED, reset_bton = RELEASED;
    int disp_regA, disp_regB;
    int inp_h, inp_l;
    int five_lt = 0x00;
@@ -740,7 +737,7 @@ while (1) {
             switch (dsswitch) {
                case 1:                 /* Display memory contents */
                   /* Display switches A-E in Display A */
-                  /* display byte X of memory address */
+                  /* Display byte X of memory address */
                   len = snprintf (buft, sizeof(buft)-1, "\x11\xC6\x6B") + len;
                   strcat(buf, buft);
                   strncat(buf, &hexswpos[2], 1);
@@ -838,7 +835,7 @@ while (1) {
                   strcat(buf, nibble);
                   len = len + 2;
 
-                  printf("Display 1: %02X %06X\n\r", hexsw[0], Eregs_Out[hexsw[0]]);
+                  printf("Display 1: %02X %05X\n\r", hexsw[0], Eregs_Out[hexsw[0]]);
                break;
             default:
                break;
@@ -866,8 +863,8 @@ while (1) {
       strcat(buf, "\xF1\xC3");
       len = len + 2;
 
-      printf("Display 1: %06X\n\r", Eregs_Out[0x71]);
-      printf("Display 2: %06X\n\r", Eregs_Out[0x72]);
+      printf("Display 1: %05X\n\r", Eregs_Out[0x71]);
+      printf("Display 2: %05X\n\r", Eregs_Out[0x72]);
 
       /* Pick up free buffer count */
       freebuf = (M[0x0754] << 8) + M[0x0755];
