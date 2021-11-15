@@ -108,6 +108,8 @@ char F2_DACTLU_Rsp[] = {
       0x0E };
 char F2_BIND_Rsp[] = {
       0x31 };
+char F2_UNBIND_Rsp[] = {
+      0x32 };
 char F2_SDT_Rsp[]  = {
       0xA0 };
 char F2_CLEAR_Rsp[] = {
@@ -451,7 +453,7 @@ int proc_PIU (char BLU_buf[], int Pptr, int Blen, int Fcntl) {
          /* Save oaf from BIND request */
          ca->tso_addr1 = BLU_buf[Pptr + FD2_TH_oaf];
          ca->lu_lu_seqn = 0;
-         // Copy +CLEAR to RU.
+         // Copy +DACTLU to RU.
          memcpy(&RSP_buf[FD2_RU_0], F2_DACTLU_Rsp, sizeof(F2_DACTLU_Rsp));
 
          Plen = 6 + 3 + sizeof(F2_DACTLU_Rsp);    // Set PIU length Th+Rh+Ru
@@ -461,6 +463,13 @@ int proc_PIU (char BLU_buf[], int Pptr, int Blen, int Fcntl) {
       /*** UNBIND & Normal end of session ***/
       if (BLU_buf[Pptr + FD2_RU_0] == 0x32 && BLU_buf[Pptr + FD2_RU_1] != 0x02) {
          ca->bindflag = 0;
+         /* Save oaf from UNBIND request */
+         ca->tso_addr1 = BLU_buf[Pptr + FD2_TH_oaf];
+         ca->lu_lu_seqn = 0;
+        // Copy +UNBIND to RU.
+         memcpy(&RSP_buf[FD2_RU_0], F2_UNBIND_Rsp, sizeof(F2_DACTLU_Rsp));
+         Plen = 6 + 3 + sizeof(F2_UNBIND_Rsp);    // Set PIU length Th+Rh+Ru
+         Rsp_buf = FILLED;
       }
 #if 0
       /*** UNBIND ****/
@@ -1062,7 +1071,6 @@ static void commadpt_read_tty(COMMADPT *ca, BYTE * bfr, int len)
 
         if (ca->telnet_opt) {
             ca->telnet_opt = 0;
-            printf("Tenet_opt\n\r");
             bfr3[0] = 0xff;  /* IAC */
             /* set won't/don't for all received commands */
             bfr3[1] = (ca->telnet_cmd == 0xfd) ? 0xfc : 0xfe;
