@@ -1,48 +1,19 @@
-/* COMM3705.C   (c) Copyright Max H. Parke, 2007-2012                */
-/*              Hercules 3705 communications controller              */
-/*              running NCP                                          */
+/******************************************************************/
+/* COMM3705.C	(c) Copyright Edwin Freekenhorst and Henk Stegeman    */
+/*                                                                    															*/ 
+/* Hercules channel extender for the 								  									*/
+/* 			3705 communications controller simulator                  						*/
+/*                                                                   																*/   
+/* This version uses a skeleton version of the COMM3705.C            				*/
+/* coding from Max H. Parke                                           										*/          
+/*                                                                    															*/
+/* The purpose of this module is to extend the 3705 Channel Adapter   		*/
+/* module of the 3705 simulator, into hercules.                    	  							*/
+/* The core function is to maintain a dual TCP/IP connection with the 			*/
+/* 3705 simulator, emulating a bus and tag channel connection.	      			*/
+/*																	  															*/
+/******************************************************************/
 
-
-/***********************************************************************/
-/*                                                                     */
-/* comm3705.c - (C) Copyright 2007 by MHP <ikj1234i at yahoo dot com>  */
-/*                                                                     */
-/* Loosely based on commadpt.c by Ivan Warren                          */
-/*                                                                     */
-/* This module appears to the "host" as a 3705 communications          */
-/* controller running NCP.  It does not attempt to provide an emulated */
-/* execution environment for native 3705 code.                         */
-/*                                                                     */
-/* Experimental release 0.02 Oct. 15, 2007                             */
-/*                                                                     */
-/* A very minimalistic SNA engine is implemented.  All received SNA    */
-/* requests are responded to with a positive response.  Also, there's  */
-/* enough code to enable a single SNA session to logon in LU1 (TTY)    */
-/* mode.                                                               */
-/*                                                                     */
-/* FID1 is the only SNA header type supported.                         */
-/*                                                                     */
-/* A large amount of required SNA functionality is not present in this */
-/* release.  There are no "state machines", "layers", "services",      */
-/* chaining*, pacing, brackets, etc.etc.etc.  There are                */
-/* probably more bugs than working functions...    Enjoy ;-)           */
-/*                                                                     */
-/* A better implementation might be to separate the SNA functions out  */
-/* into an independent process, with communications over a full-duplex */
-/* TCP/IP socket... We might also get rid of all the magic constants...*/
-/*                                                                     */
-/* New in release 0.02 -                                               */
-/* - VTAM switched (dial) support                                      */
-/* - New remote NCP capability                                         */
-/* - SNA 3270 (LU2) support (*with RU chaining)                        */
-/* - fixes for some bugs in 0.01                                       */
-/* New in release 0.03 -                                               */
-/* - don't process TTY lines until CR received                         */
-/* New in release 0.04 -                                               */
-/* - make debug messages optional                                      */
-/*                                                                     */
-/*                      73 DE KA1RBI                                   */
-/***********************************************************************/
 
 #include "hstdinc.h"
 #include "hercules.h"
@@ -568,7 +539,7 @@ static void commadpt_clean_device(DEVBLK *dev)
 }
 
 /*-------------------------------------------------------------------*/
-/* Allocate initial private structures                               */
+/* Allocate initial private structures                         */
 /*-------------------------------------------------------------------*/
 static int commadpt_alloc_device(DEVBLK *dev)
 {
@@ -584,7 +555,7 @@ static int commadpt_alloc_device(DEVBLK *dev)
 }
 
 /*-------------------------------------------------------------------*/
-/* Parsing utilities                                                 */
+/* Parsing utilities                                                 		*/
 /*-------------------------------------------------------------------*/
 /*-------------------------------------------------------------------*/
 /* commadpt_getport : returns a port number or -1                    */
@@ -711,6 +682,7 @@ static void *ATTN_adpt(void *vca) {
                close(ca->busfd);
                close(ca->tagfd);
                ca->dev->scsw.unitstat |= CSW_UC;    //Signal unit check
+               sleep(10);   /* wait 10 secs, then try to re-connect */
             }  // End rc == -1
          } else { // if rc > 0
             if (ca->dev->commadpt->debug)
@@ -719,6 +691,7 @@ static void *ATTN_adpt(void *vca) {
             close(ca->busfd);
             close(ca->tagfd);
             ca->dev->scsw.unitstat |= CSW_UC;    //Signal unit check
+            sleep(10);   /* wait 10 secs, then try to re-connect */
          } // End if rc > 0
       }  // End while ca->tagfd
    }  // End while ca->busfd
@@ -769,8 +742,10 @@ static int commadpt_init_handler (DEVBLK *dev, int argc, char *argv[]) {
    dev->devtype = 0x3705;
   // Version 4: dev->excps = 0;
       //WRMSG(HHC01058, "I", SSID_TO_LCSS(dev->ssid), dev->devnum);
-      logmsg("HHC01058I %1d:%04X: initialization starting\n", dev->ssid, dev->devnum);    
-   
+      logmsg("HHC01058I %1d:%04X: initialization starting\n", dev->ssid, dev->devnum); 
+         
+   /* legacy sense-id not supported */
+   dev->numdevid = 0;
 
    if (dev->commadpt != NULL) {
       commadpt_clean_device(dev);
@@ -991,7 +966,7 @@ static void commadpt_execute_ccw (DEVBLK *dev, BYTE code, BYTE flags,
 
    if (dev->commadpt->debug)
        //WRMSG(ADX00005, "D", SSID_TO_LCSS(dev->ssid), dev->devnum, "ccw count=", count);
-       logmsg("ADX00005D %1d:%04X: CCW count=%04X\n", dev->ssid, dev->devnum, count);
+       logmsg("ADX00005D %1d:%04X: CCW=%02X, CCW count=%04X\n", dev->ssid, dev->devnum, code, count);
 
 
    UNREFERENCED(flags);
@@ -1164,22 +1139,49 @@ static void commadpt_execute_ccw (DEVBLK *dev, BYTE code, BYTE flags,
 #endif
             break;
 
-
+         /*---------------------------------------------------------------*/
+         /* All other CCWs: get sense byte from device */
+         /*---------------------------------------------------------------*/
          default:
-         /*---------------------------------------------------------------*/
-         /* All other CCW's: Wait for a return message                    */
-         /*---------------------------------------------------------------*/
-          // Set CSW
-           *unitstat|= CSW_CE | CSW_DE;
+
+            /* Wait for the sense data */
+            rc = read(dev->commadpt->busfd, dev->sense, 256);
+            dev->numsense = rc;
+            dev->commadpt->unack_attn_count = 0;
+            num = count<dev->numsense?count:dev->numsense;
+            *more = count<dev->numsense?1:0;
+            if (dev->commadpt->debug)
+               //WRMSG(ADX00007, "D", SSID_TO_LCSS(dev->ssid), dev->devnum,"Received", rc, "sense data ", dev->sense[0], dev->sense[1]);
+               logmsg("ADX00007D %1d:%04X: sense data %02X%02X\n",dev->ssid, dev->devnum, dev->sense[0], dev->sense[1]);
+            /* Copy device sense bytes to channel I/O buffer */
+            memcpy (iobuf, dev->sense, rc);
+            *residual = count-num;
+            /* Send the ACK */
+            send_ack(dev->commadpt->busfd, dev->ssid,dev->devnum);
+             /* Get Channel Return Status */
+             rc = read(dev->commadpt->busfd, &dev->commadpt->carnstat, 1);
+             *unitstat = dev->commadpt->carnstat;
+            /* Send the ACK */
+            send_ack(dev->commadpt->busfd, dev->ssid, dev->devnum);
             break;
 
   }
-     // remove if bloew works under Linux: bzero(buf, 80);
+     // remove if below works under Linux: bzero(buf, 80);
      memset(buf, 0x00, 80);
      dev->commadpt->ccwactive = 0x00;
      release_lock(&dev->commadpt->lock);
   } else {
-    *unitstat|= CSW_UX;
+	     /*---------------------------------------------------------------*/
+        /*  3705 not online, set command reject sense 					  */
+        /*----------------------------------------------------------------*/
+            /* Set command reject sense byte, and unit check status */
+            if (code == 0xE4) {
+            *unitstat=CSW_CE+CSW_DE+CSW_UC;
+            dev->sense[0]=SENSE_CR;
+		}
+		else
+			*unitstat=CSW_CE+CSW_DE;
+		
   } // end if busfd != -1
 
 }
