@@ -66,6 +66,8 @@
 #define CSW_DEND 0x04        // Device End (DE)
 #define CSW_UCHK 0x02        // Unit check
 #define CSW_UEXC 0x01        // Unit Exception
+// Sense return codes
+#define SENSE_CR 0x80         // Command Reject
 
 #define MAXHOSTS 4
 
@@ -1074,12 +1076,21 @@ void *CAx_thread(void *pthargs) {
                carnstat = ((Eregs_Out[0x54] >> 8 ) & 0x00FF); // Get CA return status
                send_carnstat(iob->bus_socket[iob->abswitch], &carnstat, &ackbuf, iob->CA_id);
                break;
+               
+            default:       // Send command reject sense
+               data_buffer[0] = SENSE_CR;                 // Load sense data byte 0
+               if (debug_reg & 0x80)
+                  printf("CA%c: Sending sense Byte 0 %02X \n\r", iob->CA_id, data_buffer[0]);
 
-            default:
+               rc = send_socket(iob->bus_socket[iob->abswitch], (void*)&data_buffer, 1);
+               // Wait for the ACK from the host
+               recv_ack(iob->bus_socket[iob->abswitch]);
+
                // Send CA return status to host
-               carnstat = ((Eregs_Out[0x54] >> 8 ) & 0x00FF); // Get CA return status
+               carnstat = CSW_CEND | CSW_DEND;  // Get CA return status
                send_carnstat(iob->bus_socket[iob->abswitch], &carnstat, &ackbuf, iob->CA_id);
                break;
+
          }  // End of switch (ccw.code)
 
          // Release the lock
