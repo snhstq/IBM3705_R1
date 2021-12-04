@@ -137,20 +137,20 @@ int8 Eflg_rvcd;                        /* Eflag received */
 
 /* ICW Local Store Registers */
 int  abar;
-char  icw_scf[MAX_TBAR];               /* ICW[ 0- 7] SCF - Secondary Control Field */
-char  icw_pdf[MAX_TBAR];               /* ICW[ 8-15] PDF - Parallel Data Field */
-uint8 icw_lcd[MAX_TBAR];               /* ICW[16-19] LCD - Line Code Definer */
-uint8 icw_pcf[MAX_TBAR];               /* ICW[20-23] PCF - Primary Control Field */
-char  icw_sdf[MAX_TBAR];               /* ICW[24-31] SDF - Serial Data Field */
+uint8_t  icw_scf[MAX_TBAR];               /* ICW[ 0- 7] SCF - Secondary Control Field */
+uint8_t  icw_pdf[MAX_TBAR];               /* ICW[ 8-15] PDF - Parallel Data Field */
+uint8_t icw_lcd[MAX_TBAR];               /* ICW[16-19] LCD - Line Code Definer */
+uint8_t icw_pcf[MAX_TBAR];               /* ICW[20-23] PCF - Primary Control Field */
+uint8_t  icw_sdf[MAX_TBAR];               /* ICW[24-31] SDF - Serial Data Field */
                                        /* ICW[32-33] Not implemented (OSC sel bits) */
-uint16 icw_Rflags[MAX_TBAR];           /* ICW[34-47] flags */
-uint8 icw_pcf_prev[MAX_TBAR];          /* Previous icw_pcf */
-uint8 icw_lne_stat[MAX_TBAR];          /* Line state: RESET, TX, RX */
+uint16_t icw_Rflags[MAX_TBAR];           /* ICW[34-47] flags */
+uint8_t icw_pcf_prev[MAX_TBAR];          /* Previous icw_pcf */
+uint8_t icw_lne_stat[MAX_TBAR];          /* Line state: RESET, TX, RX */
 
-uint8 icw_pcf_new = 0x0;
-uint8 icw_pcf_mod = 0x00;
+uint8_t icw_pcf_new = 0x0;
+uint8_t icw_pcf_mod = 0x00;
 int8 CS2_req_L2_int = OFF;
-char BLU_buf[65536];                   /* DLC header + TH + RH + RU + DLC trailer */
+uint8_t BLU_buf[65536];                   /* DLC header + TH + RH + RU + DLC trailer */
 pthread_mutex_t icw_lock;              /* ICW lock (0 - 45)  */
 extern pthread_mutex_t r77_lock;       /* I/O reg x'77' lock */
 
@@ -167,7 +167,7 @@ void *CS2_thread(void *arg) {
    int i,c;
    register char *s;
 
-   fprintf(stderr, "\nCS2: thread %d started succesfully...\n",syscall(SYS_gettid));
+   fprintf(stderr, "\nCS2: thread %ld started succesfully...\n",syscall(SYS_gettid));
 
    while(1) {
 //    for (i = 0; i < MAX_TBAR; i++) {     // Pending multiple line support !!!
@@ -175,6 +175,7 @@ void *CS2_thread(void *arg) {
          icw_scf[t] |= 0x08;               // Turn DCD always on.
 
          // Obtain ICW lock to avoid sync issues with NCP coding
+  
          pthread_mutex_lock(&icw_lock);
          if (icw_pcf[t] != icw_pcf_new) {  // pcf changed by NCP ?
             if (debug_reg & 0x40)   // Trace PCF state ?

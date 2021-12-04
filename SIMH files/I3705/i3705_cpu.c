@@ -2034,7 +2034,7 @@ while (reason == 0) {                          /* Loop until halted */
                   // Update ABAR CS2 and update ICW[ABAR] (only when in L3 or L4).
                   abar = Eregs_Out[0x40];
                   tbar = (abar - 0x0840) >> 1; // Get ICW table ptr from abar
-//debug_reg = 0x63;                 // Very very very temp HJS
+                  //debug_reg = 0x63;                 // Very very very temp HJS
                }
                if (Efld == 0x44) {             // ICW SCF & PDF
                   icw_scf[tbar] = (Eregs_Out[0x44] >> 8) & 0x4E;   // Only Serv Req, DCD & Pgm Flag
@@ -2106,7 +2106,7 @@ while (reason == 0) {                          /* Loop until halted */
                Eregs_Inp[0x62] &= ~0x0100;     // Reset PCI interrupt
 
                if (Eregs_Out[0x62] & 0x0400) { // Reset CA1 L3 interrupts
-                  pthread_mutex_lock(&r77_lock);
+                 pthread_mutex_lock(&r77_lock);
                   Eregs_Inp[0x77] &= ~0x0008;  // Reset L3 initial selection
                   pthread_mutex_unlock(&r77_lock);
                   CA1_IS_req_L3 = OFF;
@@ -2263,9 +2263,9 @@ while (reason == 0) {                          /* Loop until halted */
       if (debug_reg & 0x02)
          fprintf(trace, "\n>>> Leaving lvl=%d \n", lvl);
    }
-   if (debug_reg == 0x80) {                    /* Extra delay ? */
-      usleep(250);
-   }
+   //if (debug_reg == 0x80) {                    /* Extra delay ? */
+     // usleep(250);
+  // }
 }  /* end while (reason == 0) */
 
 //###################### END OF SIMULATOR WHILE LOOP ######################

@@ -72,38 +72,38 @@ int rpfd;
 int lpfd;
 int sockopt;                           /* Used for setsocket option */
 int rc, len;                           /* Return code from various rtns */
-char wrkbyte[1];                       /* Work byte */
-char bufc[6];
+uint8_t wrkbyte[1];                       /* Work byte */
+uint8_t bufc[6];
 uint8_t bufh[5];
 uint8_t mbyte;
 uint16_t freebuf;
 uint32_t maddr;
 
 char *ipaddr;
-char buf[8192], ibuf[256];
-char buft[256];
-char defpos[9] = {"\x29\x03\xC0\xF0\x41\xF0\x42\xF4\x40"};
-char revred[9] = {"\x29\x03\xC0\xF0\x41\xF2\x42\xF2\x40"};
-char revgrn[9] = {"\x29\x03\xC0\xF0\x41\xF2\x42\xF4\x40"};
+uint8_t buf[8192], ibuf[256];
+uint8_t buft[256];
+uint8_t defpos[9] = {"\x29\x03\xC0\xF0\x41\xF0\x42\xF4\x40"};
+uint8_t revred[9] = {"\x29\x03\xC0\xF0\x41\xF2\x42\xF2\x40"};
+uint8_t revgrn[9] = {"\x29\x03\xC0\xF0\x41\xF2\x42\xF4\x40"};
 
-char dbb0b4[3] = {"\x11\xC6\xE2"};
-char dbb0b5[3] = {"\x11\xC7\xF2"};
-char dbb0b6[3] = {"\x11\xC9\xC2"};
-char dbb0b7[3] = {"\x11\x4A\xD2"};
-char dbb1b0[3] = {"\x11\x4B\xE2"};
-char active[21]   = {"\x29\x03\xC0\xF0\x41\xF2\x42\xF4\xC1\xC3\xE3\xC9\xE5\xC5\x29\x01\x41\xF0\x40\x40\0"};
-char enabled[17]  = {"\x29\x03\xC0\xF0\x41\xF0\x42\xF1\xC5\xD5\xC1\xC2\xD3\xC5\xC4\x40\0"};
-char disabled[17] = {"\x29\x03\xC0\xF0\x41\xF0\x42\xF2\xC4\xC9\xE2\xC1\xC2\xD3\xC5\xC4\0"};
-char ca1a[4] = {"\x11\xD4\xC5\0"};
-char ca1b[4] = {"\x11\xD5\xD5\0"};
-char ca2a[4] = {"\x11\xD7\xF5\0"};
-char ca2b[4] = {"\x11\xD9\xC5\0"};
+uint8_t dbb0b4[3] = {"\x11\xC6\xE2"};
+uint8_t dbb0b5[3] = {"\x11\xC7\xF2"};
+uint8_t dbb0b6[3] = {"\x11\xC9\xC2"};
+uint8_t dbb0b7[3] = {"\x11\x4A\xD2"};
+uint8_t dbb1b0[3] = {"\x11\x4B\xE2"};
+uint8_t active[21]   = {"\x29\x03\xC0\xF0\x41\xF2\x42\xF4\xC1\xC3\xE3\xC9\xE5\xC5\x29\x01\x41\xF0\x40\x40\0"};
+uint8_t enabled[17]  = {"\x29\x03\xC0\xF0\x41\xF0\x42\xF1\xC5\xD5\xC1\xC2\xD3\xC5\xC4\x40\0"};
+uint8_t disabled[17] = {"\x29\x03\xC0\xF0\x41\xF0\x42\xF2\xC4\xC9\xE2\xC1\xC2\xD3\xC5\xC4\0"};
+uint8_t ca1a[4] = {"\x11\xD4\xC5\0"};
+uint8_t ca1b[4] = {"\x11\xD5\xD5\0"};
+uint8_t ca2a[4] = {"\x11\xD7\xF5\0"};
+uint8_t ca2b[4] = {"\x11\xD9\xC5\0"};
 
-char nibble[3] = {"\0\0\0"};
-char hexsw[2] = {"\xF0\0"};
-char hexswpos[16] = {"\x4D\xC1\xF0\x4D\xC4\xF0\x4D\xC7\xF0\x4D\x4A\xF0\x4D\x4D\xF0\0"};
+uint8_t nibble[3] = {"\0\0\0"};
+uint8_t hexsw[2] = {"\xF0\0"};
+uint8_t hexswpos[16] = {"\x4D\xC1\xF0\x4D\xC4\xF0\x4D\xC7\xF0\x4D\x4A\xF0\x4D\x4D\xF0\0"};
 
-char fs[10][12] = {{"\x11\xD3\x5B\x29\x03\xC0\xF0\x42\xF4\x41\xF2\0"},
+uint8_t fs[10][12] = {{"\x11\xD3\x5B\x29\x03\xC0\xF0\x42\xF4\x41\xF2\0"},
                   {"\x11\xD4\x6B\x29\x03\xC0\xF0\x42\xF4\x41\xF2\0"},
                   {"\x11\xD5\x7B\x29\x03\xC0\xF0\x42\xF4\x41\xF2\0"},
                   {"\x11\xD7\x4B\x29\x03\xC0\xF0\x42\xF4\x41\xF2\0"},
@@ -138,14 +138,14 @@ char     group[16];                    /* Console group */
 int row, col, pnlmsgl, dsswitch;
 uint16_t bfa;
 unsigned char rowcol[2];
-char     pnlmsg[256];                  /* panel message */
+uint8_t  pnlmsg[256];                  /* panel message */
 
 extern int reg_bit(int reg, int bit_mask);
 extern void wait();
 extern int send_packet (int rpfd, uint8_t *buf, int len, char *caption);
 extern int recv_packet (int rpfd, uint8_t *ibuf, int len, uint8_t delim);
 extern int negotiate(int rpfd, uint8_t *class, uint8_t *model, uint8_t *extatr, uint16_t *devn, char *group);
-extern uint8_t prt_host_to_guest( uint8_t *pnlmsgi,  uint8_t *pnlmsgo, const uint ilength  );
+extern uint8_t * prt_host_to_guest( uint8_t *pnlmsgi,  uint8_t *pnlmsgo, const uint ilength  );
 char* buf3270 (int row, int col);
 char ebc2hex (char ebc0, char ebc1);
 
@@ -157,16 +157,16 @@ char ebc2hex (char ebc0, char ebc1);
    signature: it has one void* parameter and returns void    */
 
 void *PNL_thread(void *arg) {
-   fprintf(stderr, "PNL: Thread %d started succesfully... \n\r", syscall(SYS_gettid));
+   fprintf(stderr, "PNL: Thread %ld started succesfully... \n\r", syscall(SYS_gettid));
 
    // We can set one or more bits here, each one representing a single CPU
-   cpu_set_t cpuset;
+   //cpu_set_t cpuset;
 
    // Select the CPU core we want to use
-   int cpu = 2;
+   //int cpu = 2;
 
-   CPU_ZERO(&cpuset);                  // Clears the cpuset
-   CPU_SET( cpu , &cpuset);            // Set CPU on cpuset
+   //CPU_ZERO(&cpuset);                  // Clears the cpuset
+   //CPU_SET( cpu , &cpuset);            // Set CPU on cpuset
 
    /*
     * cpu affinity for the calling thread
@@ -175,7 +175,7 @@ void *PNL_thread(void *arg) {
     * third param is the cpuset in which your thread
     * will be placed. Each bit represents a CPU.
     */
-   sched_setaffinity(0, sizeof(cpuset), &cpuset);
+   //sched_setaffinity(0, sizeof(cpuset), &cpuset);
 
 
    signal (SIGALRM, sig_handler);      /* Interval timer */
@@ -250,7 +250,7 @@ void *PNL_thread(void *arg) {
       strncpy(pnlmsg, "3705 Front Panel", sizeof(pnlmsg));
       pnlmsgl = strlen(pnlmsg);
       len = snprintf (buf, sizeof(buf)-1, "\xF5\xC3\x11\x40\x5D\x1D\xF0\x29\x02\xC0\xF0\x42\xF2%s\x1D\xF0",
-      prt_host_to_guest( pnlmsg, (uint8_t*) pnlmsg,  pnlmsgl));
+         prt_host_to_guest( pnlmsg, (uint8_t*) pnlmsg,  pnlmsgl));
 
       /* Line 2 */
       len = snprintf (buft, sizeof(buft)-1, "\x11\xC1\x50\x1D\xF0\x29\x02\xC0\xF0\x42\xF4\x3C\xC2\x5F\x6D\x1D\xF0") + len;
@@ -713,6 +713,7 @@ while (1) {
          break;
 
          case 0xF5:
+            printf("entering 5\n\r");
             /* First check if the cursor is on a switch position */
             for (i = 0; i < 15; i = i + 3) {
                if ((ibuf[1] == hexswpos[i]) && (ibuf[2] == hexswpos[i+1])) break;
@@ -736,6 +737,7 @@ while (1) {
          case 0x7D:                    /* Enter = Set Address Disiplay */
             switch (dsswitch) {
                case 1:                 /* Display memory contents */
+
                   /* Display switches A-E in Display A */
                   /* Display byte X of memory address */
                   len = snprintf (buft, sizeof(buft)-1, "\x11\xC6\x6B") + len;
@@ -871,6 +873,7 @@ while (1) {
       snprintf(bufc, 5, "%4d", freebuf);
       for (int i = 0; i < 4; i++)
          bufh[i] = (bufc[i] | 0xF0);
+         
       strcat(buf, "\x11\xC6\xC8\x29\x02\xC0\xF0\x42\xF4");
       len = len + 9;
       strcat(buf, bufh);
@@ -910,11 +913,11 @@ while (1) {
             len = snprintf (buft, sizeof(buft)-1, active) + len;
             strcat(buf, buft);
          } else {
-            len = snprintf (buft, sizeof(buft)-1, enabled) + len;
+            len = snprintf (buft, sizeof(buft)-1,  enabled) + len;
             strcat(buf, buft);
          }
       }
-
+   
       /* Channel adapter 2 */
       if (iob2->abswitch == 0) {
          len = snprintf (buft, sizeof(buft)-1, ca2b) + len;

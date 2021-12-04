@@ -96,32 +96,34 @@ static unsigned char R010284[3] = {0x01, 0x02, 0x84};  // REQCONT
 /*-------------------------------------------------------------------*/
 /* Positive RU's                                                     */
 /*-------------------------------------------------------------------*/
-char F2_ACTPU_Rsp[] = {
+uint8_t F2_ACTPU_Rsp[] = {
       0x11, 0x11, 0x40, 0x40,  0x40, 0x40, 0x40, 0x40,
       0x40, 0x40, 0x00, 0x00,  0x07, 0x01, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x00 };
-char F2_ACTLU_Rsp[] = {
+uint8_t F2_ACTLU_Rsp[] = {
       0x0D, 0x01, 0x01, 0x00,  0x85, 0x00, 0x00, 0x00,
       0x0C, 0x0E, 0x03, 0x00,  0x01, 0x00, 0x00, 0x00,
       0x40, 0x40, 0x40, 0x40,  0x40, 0x40, 0x40, 0x40 };
-char F2_DACTLU_Rsp[] = {
+uint8_t F2_DACTLU_Rsp[] = {
       0x0E };
-char F2_BIND_Rsp[] = {
+uint8_t F2_BIND_Rsp[] = {
       0x31 };
-char F2_UNBIND_Rsp[] = {
+uint8_t F2_UNBIND_Rsp[] = {
       0x32 };
-char F2_SDT_Rsp[]  = {
+uint8_t F2_SDT_Rsp[]  = {
       0xA0 };
-char F2_CLEAR_Rsp[] = {
+uint8_t F2_CLEAR_Rsp[] = {
       0xA1 };
-char F2_INITSELF_Req[] = {
+uint8_t F2_SIGNAL_Rsp[] = {
+      0xC9 };
+uint8_t F2_INITSELF_Req[] = {
       0x2C, 0x00, 0x00, 0x02, 0x00, 0x01,  0x0B, 0x80, 0x00,  // TH + RH
       0x01, 0x06, 0x81, 0x00,  0x40, 0x40, 0x40, 0x40,  // Mode name
       0x40, 0x40, 0x40, 0x40,  0xF3, 0x08, 0x40, 0x40,  // Req id
       0X40, 0x40, 0x40, 0x40,  0x40, 0x40,
       0x00, 0x00, 0x00 };
 
-char RSP_buf[BUFLEN_3270];                  // Response buffer
+uint8_t RSP_buf[BUFLEN_3270];                  // Response buffer
 int double_up_iac (BYTE *buf, int len);
 
 /*-------------------------------------------------------------------*/
@@ -162,7 +164,7 @@ void connect_message(int sfd, int na, int flag) {
 //   |FID2|resv|DAF |OAF | seq nr. |RH_0|RH_1|RH_2|RU_0...    ...|
 //   |----+----+----+----+----+----|----+----+----|----+---//----|
 //
-int proc_PIU (char BLU_buf[], int Pptr, int Blen, int Fcntl) {
+int proc_PIU (unsigned char BLU_buf[], int Pptr, int Blen, int Fcntl) {
    // PIU-buf[Pptr] must point to byte 0 of the TH.
    // Fcntl: RR / IFRAME / IFRAME + Cpoll
    BYTE *ru_ptr;                       // ???
@@ -411,7 +413,14 @@ int proc_PIU (char BLU_buf[], int Pptr, int Blen, int Fcntl) {
          ca->tso_addr1 = BLU_buf[Pptr + FD2_TH_oaf];
          ca->lu_lu_seqn = 0;
          ca->bindflag = 1;
-         // Copy +BIND to RU.
+         //If not FM3 profile or cols < 24 or rows < 80, respond with -BIND
+         if ((BLU_buf[Pptr + FD2_RU_0 + 2] != 0x03) || 
+             (BLU_buf[Pptr + FD2_RU_0 + 20] < 0x18) || 
+             (BLU_buf[Pptr + FD2_RU_0 + 21] < 0x50 )) {
+                RSP_buf[FD2_RH_1] =  BLU_buf[Pptr + FD2_RH_1] | 0x10;  // -Rsp
+                ca->bindflag = 0;
+            }
+          // Copy BIND to RU.
          memcpy(&RSP_buf[FD2_RU_0], F2_BIND_Rsp, sizeof(F2_BIND_Rsp));
 
          Plen = 6 + 3 + sizeof(F2_BIND_Rsp);    // Set PIU length Th+Rh+Ru
@@ -444,6 +453,20 @@ int proc_PIU (char BLU_buf[], int Pptr, int Blen, int Fcntl) {
          memcpy(&RSP_buf[FD2_RU_0], F2_CLEAR_Rsp, sizeof(F2_CLEAR_Rsp));
 
          Plen = 6 + 3 + sizeof(F2_CLEAR_Rsp);    // Set PIU length Th+Rh+Ru
+         Rsp_buf = FILLED;
+      }
+      /*******************************/
+      /*** SIGNAL                 ***/
+      /*******************************/
+      if (BLU_buf[Pptr + FD2_RU_0] == 0xC9) {
+         /* Save oaf from BIND request */
+         ca->tso_addr1 = BLU_buf[Pptr + FD2_TH_oaf];
+         ca->lu_lu_seqn = 0;
+         ca->ncpa_sscp_seqn = 0;                 // Reset sequence number
+         // Copy +SIGNAL to RU.
+         memcpy(&RSP_buf[FD2_RU_0], F2_SIGNAL_Rsp, sizeof(F2_SIGNAL_Rsp));
+
+         Plen = 6 + 3 + sizeof(F2_SIGNAL_Rsp);    // Set PIU length Th+Rh+Ru
          Rsp_buf = FILLED;
       }
       /*******************************/
@@ -548,7 +571,7 @@ unsigned char host_to_guest (unsigned char byte)
 }
 
 
-BYTE* prt_host_to_guest( const BYTE *psinbuf, BYTE *psoutbuf, const u_int ilength )
+uint8_t * prt_host_to_guest( const uint8_t *psinbuf, uint8_t *psoutbuf, const u_int ilength )
 {
    u_int   count;
    int     pad = FALSE;

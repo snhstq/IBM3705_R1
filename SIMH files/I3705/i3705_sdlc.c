@@ -46,15 +46,15 @@ int8 stat_mode = NDM;
 int8 new_S_Nr, new_S_Ns;               // Secondairy station frame numbers
 int8 rxtx_dir = RX;                    // Rx or Tx flag
 
-void proc_BLU(char BLU_buf[], int Blen);   // SDLC frame handler
-void proc_frame(char BLU_buf[], int Fptr, int Blen); // Process frame header
-int  proc_PIU(char PIU_buf[], int Fptr, int Blen, int Ftype);   // PIU handler
-void trace_Fbuf(char BLU_buf[], int Fptr, int Blen, int rxtx_dir);   // Print trace records
+void proc_BLU(unsigned char BLU_buf[], int Blen);   // SDLC frame handler
+void proc_frame(unsigned char BLU_buf[], int Fptr, int Blen); // Process frame header
+int  proc_PIU(unsigned char PIU_buf[], int Fptr, int Blen, int Ftype);   // PIU handler
+void trace_Fbuf(unsigned char BLU_buf[], int Fptr, int Blen, int rxtx_dir);   // Print trace records
 
 //*********************************************************************
 //   Incomming SDLC frame (BLU) handler
 //*********************************************************************
-void proc_BLU (char BLU_buf[], int Blen) {
+void proc_BLU (unsigned char BLU_buf[], int Blen) {
    register char *s;
    int temp;
    int Fptr = 0;
@@ -80,7 +80,7 @@ void proc_BLU (char BLU_buf[], int Blen) {
 //*********************************************************************
 //   Process incomming SDLC frame(s) and respond accordingly
 //*********************************************************************
-void proc_frame(char BLU_buf[], int Fptr, int Blen) {
+void proc_frame(unsigned char BLU_buf[], int Fptr, int Blen) {
    register char *s;
    int Pptr;                           // Pointer to start of PIU in BLU buffer
    int Plen;                           // Request or Response PIU length
@@ -220,7 +220,7 @@ void proc_frame(char BLU_buf[], int Fptr, int Blen) {
 //*********************************************************************
 //   Print trace records of frame buffer (Fbuf)
 //*********************************************************************
-void trace_Fbuf(char BLU_buf[], int Fptr, int Flen, int rxtx_dir) {
+void trace_Fbuf(uint8_t BLU_buf[], int Fptr, int Flen, int rxtx_dir) {
    register char *s;
    int i;
 

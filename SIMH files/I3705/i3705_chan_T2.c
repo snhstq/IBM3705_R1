@@ -252,7 +252,7 @@ int host_connect(struct IO3705 *iob, int abport) {
 // ************************************************************
 // Function to send CA return status to the host
 // ************************************************************
-void send_carnstat(int sockptr, char *carnstat, char *ackbuf, char CA_id) {
+void send_carnstat(int sockptr, char *carnstat, uint8_t *ackbuf, char CA_id) {
    int rc;                         // Return code
 
    while (Ireg_bit(0x77, 0x0028) == ON)
@@ -280,7 +280,7 @@ void send_carnstat(int sockptr, char *carnstat, char *ackbuf, char CA_id) {
    // Wait for the ACK from the host
    rc = recv(sockptr, ackbuf, 1,0);
    if (debug_reg & 0x80)
-      printf("\nCA%c: Ack received %02X on socket %d\n\r", CA_id, *ackbuf, sockptr);
+      printf("CA%c: Ack received %02X on socket %d\n\r", CA_id, *ackbuf, sockptr);
    Eregs_Out[0x54] &= ~0xFFFF;                      // Reset CA status bytes
    if (CA_id == '1')
       Eregs_Inp[0x55] &= ~0x0101;                   // Reset CA Active and CA 1 selected
@@ -294,7 +294,7 @@ void send_carnstat(int sockptr, char *carnstat, char *ackbuf, char CA_id) {
 // Function to wait for an ACK from the host
 // ************************************************************
 void recv_ack(int sockptr) {
-   char ackbuf;
+   uint8_t ackbuf;
    int rc;
    rc = read(sockptr, &ackbuf, 1);
    return;
@@ -305,7 +305,7 @@ void recv_ack(int sockptr) {
 // Function to send an ACK to the host
 // ************************************************************
 void send_ack(int sockptr) {
-   char ackbuf;
+   uint8_t ackbuf;
    int rc;
    rc = send(sockptr, &ackbuf, 1, 0);
    return;
@@ -414,11 +414,12 @@ void *CA_ATTN_thread(void *pthrargs) {
    struct pth_args *args = pthrargs;
    iob1 = args->arg1;
    iob2 = args->arg2;
-   int rc;
-   char carnstat, ackbuf;
+   int rc,retry;
+   uint8_t carnstat;
+   uint8_t ackbuf;
    ackbuf = 0x00;
 
-   printf("\nCA-T2: ATTN thread %d started succesfully...  \n\r", syscall(SYS_gettid));
+   printf("\nCA-T2: ATTN thread %ld started succesfully...  \n\r", syscall(SYS_gettid));
 
    while (1) {
       while (iob1->CA_active == FALSE && iob2->CA_active == FALSE)
@@ -436,16 +437,28 @@ void *CA_ATTN_thread(void *pthrargs) {
             printf("CA%c: L3 register 55 %04X \n\r", iob->CA_id, Eregs_Out[0x55]);
          Eregs_Inp[0x55] |= 0x0200;              // Set Program Requested Attention
          pthread_mutex_lock(&r77_lock);
-         Eregs_Inp[0x77] |= iob->CA_mask;        // Set CA1 L3 Interrupt Request
+         Eregs_Inp[0x77] |= iob->CA_mask;        // Set CA1 L3 Interrupt Request                  // Chan Adap  L3 Interrupt request flag
          pthread_mutex_unlock(&r77_lock);
-         CA1_IS_req_L3 = ON;                     // Chan Adap  L3 Interrupt request flag
+         CA1_IS_req_L3 = ON;   
          while (Ireg_bit(0x77, iob->CA_mask) == ON)
             wait();
          Eregs_Out[0x55] &= ~0x0200;             // Reset attention request
          if (debug_reg & 0x80)
             printf("CA%c: Sending Return status\n\r", iob->CA_id);
          // Send CA retun status to host
-         send_carnstat(iob->tag_socket[iob->abswitch], &carnstat, &ackbuf,iob->CA_id);
+         retry = 0;
+         while (retry < 4) {
+		      send_carnstat(iob->tag_socket[iob->abswitch], &carnstat, &ackbuf,iob->CA_id);
+            if (ackbuf == 0x8F) break;
+            printf("CA%c: Negative ACK received for ATTN, retrying in 1 sec...\n\r", iob->CA_id);
+            pthread_mutex_unlock(&lock);   //Free lock to solve possible deadlock
+            sleep(1);
+            retry++;
+            pthread_mutex_lock(&lock);    //Grab lock
+         }
+         if (retry > 3) printf("CA%c: Failed to inject ATTN, cancelled\n\r", iob->CA_id);
+         if (debug_reg & 0x80)
+            printf("CA%c: ACK received=%02X\n\r", iob->CA_id,ackbuf);
          // Release the lock
          pthread_mutex_unlock(&lock);
       }
@@ -498,7 +511,7 @@ void *CA_T2_thread(void *arg) {
       uint64_t u64;
    } epoll_Data_t;
 
-   printf("\nCA-T2: Main thread %d started succesfully...  \n", syscall(SYS_gettid));
+   printf("\nCA-T2: Main thread %ld started succesfully...  \n", syscall(SYS_gettid));
 
    pthread_t id1, id2, id3;
    args = malloc(sizeof(struct pth_args) * 1);
@@ -764,7 +777,9 @@ void *CAx_thread(void *pthargs) {
          iob->tag_socket[iob->abswitch] = -1;
       } else {
          // Grab the lock to avoid sync issues
-         pthread_mutex_lock(&lock);
+         rc = pthread_mutex_lock(&lock);
+         if (debug_reg & 0x80)
+               printf("CA%c: Allocate main lock, rc = %d \n\r", iob->CA_id,rc);
 
          // All data transfers are preceded by a CCW.
          ccw.code  =  0x00;
@@ -1094,7 +1109,9 @@ void *CAx_thread(void *pthargs) {
          }  // End of switch (ccw.code)
 
          // Release the lock
-         pthread_mutex_unlock(&lock);
+         rc = pthread_mutex_unlock(&lock);
+         if (debug_reg & 0x80)
+                  printf("CA%c: Release main lock, rc = %d \n\r", iob->CA_id,rc);
       }  // End of if - else
    }  // End of while(1)... */
 }
