@@ -300,12 +300,15 @@ static int connect_adpt(COMMADPT *ca) {
 /* Subroutine to send ack to remote channel adapter                  */
 /*-------------------------------------------------------------------*/
 static void
-send_ack(int sockfd, U16 ssid, U16 devnum) {
+send_ack(int sockfd, U16 ssid, U16 devnum, U32 debug) {
    int rc;                              /* Return code               */
-   char ackbuf = 0x8F;
+   uint8_t ackbuf = 0x8F;
 
-   if (sockfd > 0)
+   if (sockfd > 0) {
       rc = send (sockfd, &ackbuf, 1, 0);
+      if (debug)
+         logmsg("ADX00004I %1d:%04X: send ack(%d) completed with rc=%d \n", ssid, devnum, sockfd,rc);
+	}
    else
       rc = -1;
    if (rc < 0)
@@ -319,12 +322,15 @@ send_ack(int sockfd, U16 ssid, U16 devnum) {
 /* Subroutine to receive ack from remote channel adapter             */
 /*-------------------------------------------------------------------*/
 static void
-recv_ack(int sockfd, U16 ssid, U16 devnum) {
+recv_ack(int sockfd, U16 ssid, U16 devnum, U32 debug) {
    int rc;                             /* Return code               */
-   char ackbuf;
+   uint8_t ackbuf;
 
-   if (sockfd > 0)
-      rc = read(sockfd, &ackbuf, sizeof(ackbuf));
+   if (sockfd > 0) {
+      rc = read(sockfd, &ackbuf, 1);
+      if (debug)
+         logmsg("ADX00004I %1d:%04X: recv ack(%d) completed with rc=%d \n", ssid, devnum, sockfd,rc);
+	}
    else
       rc = -1;
    if (rc < 0)
@@ -341,13 +347,16 @@ static int
 write_adpt(BYTE *bufferp, int len, COMMADPT *ca) {
    int rc;                              /* Return code               */
 
-   if (ca->busfd > 0)
+   if (ca->busfd > 0) {
       rc = send (ca->busfd, bufferp, len, 0);
+      if (ca->debug)
+         logmsg("ADX00004I %1d:%04X: write adpt(%d) completed with rc=%d \n", ca->dev->ssid, ca->dev->devnum,ca->busfd,rc);
+	}
    else
       rc = -1;
    if (rc < 0) {
       //WRMSG(ADX00004, "E",  ca->dev->devnum, "write_adpt()", strerror(HSO_errno));
-      logmsg("ADX00004E %1d:%04X: write_adpt() %s\n",  ca->dev->ssid, ca->dev->devnum, strerror(HSO_errno));
+      logmsg("ADX00004E %1d:%04X: write_adpt(%d) %s\n",  ca->dev->ssid, ca->dev->devnum, ca->busfd, strerror(HSO_errno));
       return -1;
    }
    return 0;
@@ -446,6 +455,7 @@ static void logdump(char *txt,DEVBLK *dev,BYTE *bfr,size_t sz)
 			if (bfr[13] == 0xA0) ru_type = "SDT";
 			if (bfr[13] == 0x31) ru_type = "BIND";
 			if (bfr[13] == 0x32) ru_type = "UNBIND";
+			if (bfr[13] == 0xC9) ru_type = "SIGNAL";
 			if (!memcmp(&bfr[13], "\x01\x02\x01", 3)) ru_type = "CONTACT";
 			if (!memcmp(&bfr[13], "\x01\x02\x02", 3)) ru_type = "DISCONTACT";
 			if (!memcmp(&bfr[13], "\x01\x02\x03", 3)) ru_type = "IPLINIT";
@@ -595,7 +605,7 @@ static void *ATTN_adpt(void *vca) {
    COMMADPT *ca;
    
    int rc, rc_attn;  /* return code from various rtns     */
-    char ackbuf = 0x8F;
+    uint8_t ackbuf = 0x8F;
     
     
    ca = (COMMADPT*)vca;
@@ -988,7 +998,7 @@ static void commadpt_execute_ccw (DEVBLK *dev, BYTE code, BYTE flags,
 
       rc = write_adpt((void*)&ccw, sizeof(ccw), dev->commadpt);
       /* wait for ACK */
-      recv_ack(dev->commadpt->busfd, dev->ssid, dev->devnum);
+      recv_ack(dev->commadpt->busfd, dev->ssid, dev->devnum,dev->commadpt->debug);
 
       switch (code) {
          /*---------------------------------------------------------------*/
@@ -1007,7 +1017,7 @@ static void commadpt_execute_ccw (DEVBLK *dev, BYTE code, BYTE flags,
              rc = read(dev->commadpt->busfd, &dev->commadpt->carnstat, 1);
              *unitstat = dev->commadpt->carnstat;
              /* send ACK */
-             send_ack(dev->commadpt->busfd, dev->ssid, dev->devnum);
+             send_ack(dev->commadpt->busfd, dev->ssid, dev->devnum,dev->commadpt->debug);
              break;
 
          /*---------------------------------------------------------------*/
@@ -1027,14 +1037,15 @@ static void commadpt_execute_ccw (DEVBLK *dev, BYTE code, BYTE flags,
             memcpy (iobuf, dev->sense, rc);
             *residual = count-num;
             /* Send the ACK */
-            send_ack(dev->commadpt->busfd, dev->ssid,dev->devnum);
-            /* Read the CSW */
-            rc = read(dev->commadpt->busfd, dev->commadpt->inpbuf, 256);
+            send_ack(dev->commadpt->busfd, dev->ssid,dev->devnum,dev->commadpt->debug);
+             /* Get Channel Return Status */
+             rc = read(dev->commadpt->busfd, &dev->commadpt->carnstat, 1);
+             //*unitstat = dev->commadpt->carnstat;
             // Below  is a bypass. 3705/miniROS sends x00 as the initial CSW flags, which halts further I/O
             // *unitstat = dev->commadpt->inpbuf[4];     // write CSW
-            *unitstat = CSW_CE | CSW_DE;
+             *unitstat = CSW_CE | CSW_DE;
             /* Send the ACK */
-            send_ack(dev->commadpt->busfd, dev->ssid, dev->devnum);
+            send_ack(dev->commadpt->busfd, dev->ssid, dev->devnum,dev->commadpt->debug);
             break;
 
          /*---------------------------------------------------------------*/
@@ -1045,14 +1056,14 @@ static void commadpt_execute_ccw (DEVBLK *dev, BYTE code, BYTE flags,
             logdump("WRITE", dev, iobuf, count);
             rc = write_adpt(iobuf, count, dev->commadpt);
             /* Wait for the ACK from the remote channel adapter */
-            recv_ack(dev->commadpt->busfd, dev->ssid, dev->devnum);
+            recv_ack(dev->commadpt->busfd, dev->ssid, dev->devnum, dev->commadpt->debug);
             if (rc == 0) {
                *residual = 0;
                /* Get Channel Return Status */
                rc = read(dev->commadpt->busfd, &dev->commadpt->carnstat, 1);
                *unitstat = dev->commadpt->carnstat;
                /* send ACK */
-               send_ack(dev->commadpt->busfd, dev->ssid, dev->devnum);
+               send_ack(dev->commadpt->busfd, dev->ssid, dev->devnum, dev->commadpt->debug);
             } else {
                *unitstat|= CSW_ATTN;
                *unitstat|= CSW_UX|CSW_ATTN;
@@ -1076,7 +1087,7 @@ static void commadpt_execute_ccw (DEVBLK *dev, BYTE code, BYTE flags,
             *residual = count;
             *unitstat = dev->commadpt->carnstat;
             /* send ACK */
-            send_ack(dev->commadpt->busfd, dev->ssid, dev->devnum);
+            send_ack(dev->commadpt->busfd, dev->ssid, dev->devnum,dev->commadpt->debug);
             break;
 
          /*---------------------------------------------------------------*/
@@ -1094,13 +1105,13 @@ static void commadpt_execute_ccw (DEVBLK *dev, BYTE code, BYTE flags,
             *residual = count - rc;
             logdump("READ", dev, iobuf, rc);
             /* Send the ACK */
-            send_ack(dev->commadpt->busfd, dev->ssid, dev->devnum);
+            send_ack(dev->commadpt->busfd, dev->ssid, dev->devnum,dev->commadpt->debug);
 
             /* Get Channel Return Status */
             rc = read(dev->commadpt->busfd, &dev->commadpt->carnstat, 1);
             *unitstat = dev->commadpt->carnstat;
             /* send ACK */
-            send_ack(dev->commadpt->busfd, dev->ssid, dev->devnum);
+            send_ack(dev->commadpt->busfd, dev->ssid, dev->devnum,dev->commadpt->debug);
 #if 0  //  <=== !!!
             if (dev->commadpt->sendq) {
                *unitstat|= CSW_ATTN;
@@ -1119,14 +1130,14 @@ static void commadpt_execute_ccw (DEVBLK *dev, BYTE code, BYTE flags,
 
             rc = write_adpt(iobuf, count, dev->commadpt);
             /* Wait for the ACK from the remote channel adapter */
-            recv_ack(dev->commadpt->busfd, dev->ssid, dev->devnum);
+            recv_ack(dev->commadpt->busfd, dev->ssid, dev->devnum, dev->commadpt->debug);
             if (rc == 0) {
                *residual = 0;
                /* Get Channel Return Status */
                rc = read(dev->commadpt->busfd, &dev->commadpt->carnstat, 1);
                *unitstat = dev->commadpt->carnstat;
                /* Send ACK */
-               send_ack(dev->commadpt->busfd, dev->ssid, dev->devnum);
+               send_ack(dev->commadpt->busfd, dev->ssid, dev->devnum, dev->commadpt->debug);
             } else {
                *unitstat|= CSW_ATTN;
                *unitstat|= CSW_UX|CSW_ATTN;
@@ -1157,12 +1168,12 @@ static void commadpt_execute_ccw (DEVBLK *dev, BYTE code, BYTE flags,
             memcpy (iobuf, dev->sense, rc);
             *residual = count-num;
             /* Send the ACK */
-            send_ack(dev->commadpt->busfd, dev->ssid,dev->devnum);
+            send_ack(dev->commadpt->busfd, dev->ssid,dev->devnum,dev->commadpt->debug);
              /* Get Channel Return Status */
              rc = read(dev->commadpt->busfd, &dev->commadpt->carnstat, 1);
              *unitstat = dev->commadpt->carnstat;
             /* Send the ACK */
-            send_ack(dev->commadpt->busfd, dev->ssid, dev->devnum);
+            send_ack(dev->commadpt->busfd, dev->ssid, dev->devnum, dev->commadpt->debug);
             break;
 
   }
@@ -1170,6 +1181,8 @@ static void commadpt_execute_ccw (DEVBLK *dev, BYTE code, BYTE flags,
      memset(buf, 0x00, 80);
      dev->commadpt->ccwactive = 0x00;
      release_lock(&dev->commadpt->lock);
+     if (dev->commadpt->debug)
+        logmsg("ADX00002D %1d:%04X: Release Lock OK\n", dev->ssid, dev->devnum);
   } else {
 	     /*---------------------------------------------------------------*/
         /*  3705 not online, set command reject sense 					  */
