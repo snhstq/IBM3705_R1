@@ -461,8 +461,6 @@ int proc_PIU (unsigned char BLU_buf[], int Pptr, int Blen, int Fcntl) {
       if (BLU_buf[Pptr + FD2_RU_0] == 0xC9) {
          /* Save oaf from BIND request */
          ca->tso_addr1 = BLU_buf[Pptr + FD2_TH_oaf];
-         ca->lu_lu_seqn = 0;
-         ca->ncpa_sscp_seqn = 0;                 // Reset sequence number
          // Copy +SIGNAL to RU.
          memcpy(&RSP_buf[FD2_RU_0], F2_SIGNAL_Rsp, sizeof(F2_SIGNAL_Rsp));
 
