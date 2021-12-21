@@ -890,13 +890,9 @@ static int commadpt_close_device (DEVBLK *dev) {
    return 0;
 }
 
-
 /*-------------------------------------------------------------------*/
-/* The Below subroutine is replaced by the channel adapter extender  */
-/*                                                                   */
-/*-------------------------------------------------------------------*/
-/*-------------------------------------------------------------------*/
-/* Execute a Channel Command Word                                    */
+/* xmit CCW to 3705 Channel Adapter for processing                   */
+/* Inject returned device status back into the channel               */
 /*-------------------------------------------------------------------*/
 static void commadpt_execute_ccw (DEVBLK *dev, BYTE code, BYTE flags,
         BYTE chained, U32 count, BYTE prevcode, int ccwseq,
