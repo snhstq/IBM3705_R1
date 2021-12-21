@@ -397,7 +397,6 @@ static void logdump(char *txt, DEVBLK *dev, BYTE *bfr, size_t sz) {
    logmsg("\nHHCCA300D ");
    for (i = 0; i <sz; i++) {
       if (i%16 == 0) {
-         {
          if (i != 0) {
             logmsg("\nHHCCA300D ");
          }
