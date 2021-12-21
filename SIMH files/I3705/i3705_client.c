@@ -1142,7 +1142,7 @@ static void commadpt_read_tty(COMMADPT *ca, BYTE * bfr, int len)
     }
     /* received data (rlen3270 > 0) is sufficient for 3270,
        but for TTY, eol_flag must also be set */
-       printf("\n");
+//       printf("\n");
 
     if ((ca->eol_flag || ca->is_3270) && ca->rlen3270)
     {

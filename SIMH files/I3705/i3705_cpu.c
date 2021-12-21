@@ -176,6 +176,7 @@ extern int8 icw_pcf_new;                                /* CS2: new pdf */
 extern int8 icw_pcf_mod;                                /* CS2: modified pdf flag */
 extern pthread_mutex_t icw_lock;                        /* CS2: ICW update lock */
 pthread_mutex_t r77_lock;                               /* CA2/CS2: Reg77 update lock */
+pthread_mutex_t r7f_lock;                               /* CCU: Reg7F update lock */
 
 uint8 M[MAXMEMSIZE] = { 0 };                            /* Memory 3705 */
 int32 GR[8][4] = { 0x00 };                              /* General Registers Group 0-3 */
@@ -1984,11 +1985,11 @@ while (reason == 0) {                          /* Loop until halted */
             if (OP_reg_chk)  Eregs_Inp[0x7E]  |= 0x0008;   // OPC check
             if (ipl_req_L1)  Eregs_Inp[0x7E]  |= 0x0002;   // IPL L1 request
 
-            Eregs_Inp[0x7F] = 0x0000;    // Reset all bits in reg 0x7F
+            Eregs_Inp[0x7F] &= 0x0204;    // Reset bits in reg 0x7F
             if (diag_req_L2) Eregs_Inp[0x7F]  |= 0x8000;   // Diagnostic L2 request
-            if (inter_req_L3) Eregs_Inp[0x7F] |= 0x0200;   // Panel Interrupt L3
+            //if (inter_req_L3) Eregs_Inp[0x7F] |= 0x0200;   // Panel Interrupt L3
             if (pci_req_L4) Eregs_Inp[0x7F]   |= 0x0100;   // PCI L4 request
-            if (timer_req_L3) Eregs_Inp[0x7F] |= 0x0004;   // Interval timer L3 request
+            //if (timer_req_L3) Eregs_Inp[0x7F] |= 0x0004;   // Interval timer L3 request
             if (pci_req_L3) Eregs_Inp[0x7F]   |= 0x0002;   // PCI L3 request
             if (svc_req_L4) Eregs_Inp[0x7F]   |= 0x0001;   // SVC L4 request
 
@@ -2148,14 +2149,25 @@ while (reason == 0) {                          /* Loop until halted */
                }
                if (w_byte & 0x0004)      // Reset all L1 prgm checks
                   IO_L5_chk = OP_reg_chk = adr_ex_chk = OFF;
-               if (w_byte & 0x2000)      // Reset Panel Interrupt L3 ?
+               if (w_byte & 0x2000)  {    // Reset Panel Interrupt L3 ?
+                     pthread_mutex_lock(&r7f_lock);
+                     Eregs_Inp[0x7F] &= ~0x0200;  // Reset L3 Panel Interrupt
+                     pthread_mutex_unlock(&r7f_lock);
+                     inter_req_L3 = OFF;
+                     Eregs_Out[0x77] &= ~0x2000;       //Reset L3 Panel Reset
+                  }
                   inter_req_L3 = OFF;
                if ((w_byte &0x0200) && (test_mode))  // Set Diagnostic mode L2 ?
                   diag_req_L2 = ON;
                if ((w_byte &0x0100) && (test_mode))  // Reset Diagnostic mode L2 ?
                   diag_req_L2 = OFF;
-               if (w_byte & 0x0040)      // Reset Interval Timer L3 ?
-                  timer_req_L3 = OFF;
+               if (w_byte & 0x0040)  {    // Reset Interval Timer L3 ?
+                     pthread_mutex_lock(&r7f_lock);
+                     Eregs_Inp[0x7F] &= ~0x0004;  // Reset L3 Interval Timer
+                     pthread_mutex_unlock(&r7f_lock);
+                     timer_req_L3 = OFF;
+                     Eregs_Out[0x77] &= ~0x0040;       //Reset L3 Interval Reset
+                  }
                if (w_byte & 0x0020)      // Reset PCI L3 ?
                   pci_req_L3 = OFF;
                if (w_byte & 0x0002)      // Reset PCI L4 ?

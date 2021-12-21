@@ -38,6 +38,7 @@
 #include <signal.h>
 #include <string.h>
 #include <unistd.h>
+#include <pthread.h>
 #include <ifaddrs.h>
 #include <sys/time.h>
 #include <sys/syscall.h>
@@ -115,6 +116,7 @@ uint8_t fs[10][12] = {{"\x11\xD3\x5B\x29\x03\xC0\xF0\x42\xF4\x41\xF2\0"},
                   {"\x11\xD3\xC9\x29\x03\xC0\xF0\x42\xF4\x41\xF2\0"}};
 
 extern uint8 M[MAXMEMSIZE];
+extern pthread_mutex_t r7f_lock;
 extern struct IO3705 {
    char CA_id;
    int CA_active;
@@ -141,6 +143,7 @@ unsigned char rowcol[2];
 uint8_t  pnlmsg[256];                  /* panel message */
 
 extern int reg_bit(int reg, int bit_mask);
+extern int Ireg_bit(int reg, int bit_mask);
 extern void wait();
 extern int send_packet (int rpfd, uint8_t *buf, int len, char *caption);
 extern int recv_packet (int rpfd, uint8_t *ibuf, int len, uint8_t delim);
@@ -855,9 +858,11 @@ while (1) {
          return NULL;
       }  /* end if(rc) */
 
+      pthread_mutex_lock(&r7f_lock);
       Eregs_Inp[0x7F] |= 0x0200;
+      pthread_mutex_lock(&r7f_lock);
       inter_req_L3 = ON;               /* Panel L3 request flag */
-      while (reg_bit(0x7F, 0x0200) == ON)
+      while (Ireg_bit(0x7F, 0x0200) == ON)
          wait();
 
       len = 0;
@@ -978,11 +983,11 @@ void timer_msec (long int msec) {
 
 // Kick the 3705 100msec timer...
 void sig_handler (int signo) {
-   if (test_mode == OFF) {
+   if ((test_mode == OFF) && !(Eregs_Inp[0x7F] &= 0x0004)) {
+      pthread_mutex_lock(&r7f_lock);
       Eregs_Inp[0x7F] |= 0x0004;
+      pthread_mutex_unlock(&r7f_lock);
       timer_req_L3 = ON;
-   //   while (reg_bit(0x77, 0x0040) == OFF)
-   //   wait();
    }
 }
 
