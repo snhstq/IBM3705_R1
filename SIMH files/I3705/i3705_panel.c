@@ -535,7 +535,7 @@ void *PNL_thread(void *arg) {
       strcat(buf, buft);
 
       /* Line 24 PF KEYS */
-      strncpy(pnlmsg, "ENTER=SET ADDRESS DISPLAY ", sizeof(pnlmsg));
+      strncpy(pnlmsg, "PF7=INTERRUPT ENTER=SET ADDRESS DISPLAY ", sizeof(pnlmsg));
       pnlmsgl = strlen(pnlmsg);
       len = snprintf (buft, sizeof(buft)-1, "\x11\x5C\xF0\x29\x02\xC0\xF0\x42\xF1\%s\x1D\xF0",
       prt_host_to_guest( pnlmsg, (uint8_t*) pnlmsg,  pnlmsgl)) + len;
@@ -737,6 +737,14 @@ while (1) {
             Eregs_Inp[0x71] = Eregs_Inp[0x71] + (ebc2hex(hexswpos[11], hexswpos[14]));
 
          break;
+         case 0xF7:                          /* iNTERRUPT Pressed */     
+            pthread_mutex_lock(&r7f_lock);
+            Eregs_Inp[0x7F] |= 0x0200;
+            pthread_mutex_unlock(&r7f_lock);
+            inter_req_L3 = ON;               /* Panel L3 request flag */
+            while (Ireg_bit(0x7F,0x0200) == ON)
+               wait();
+         break;
          case 0x7D:                    /* Enter = Set Address Disiplay */
             switch (dsswitch) {
                case 1:                 /* Display memory contents */
@@ -858,12 +866,6 @@ while (1) {
          return NULL;
       }  /* end if(rc) */
 
-      pthread_mutex_lock(&r7f_lock);
-      Eregs_Inp[0x7F] |= 0x0200;
-      pthread_mutex_lock(&r7f_lock);
-      inter_req_L3 = ON;               /* Panel L3 request flag */
-      while (Ireg_bit(0x7F, 0x0200) == ON)
-         wait();
 
       len = 0;
       buf[0] = '\0';
