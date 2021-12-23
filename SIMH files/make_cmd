@@ -1,1 +1,1 @@
-make -j i3705 LDFLAGS="-lwiringPi -lm -lrt -lpthread -ldl"
+make -j i3705 LDFLAGS="-lm -lrt -lpthread -ldl"
