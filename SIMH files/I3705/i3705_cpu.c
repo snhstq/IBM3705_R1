@@ -171,7 +171,6 @@ extern int8 icw_lcd[];                                  /* CS2: lcd */
 extern int8 icw_pcf[];                                  /* CS2: pcf */
 extern int8 icw_sdf[];                                  /* CS2: sdf */
 extern int8 icw_Rflags[];                               /* CS2: Rflags */
-extern int8 icw_pdf_reg;                                /* CS2: pdf is filled or empty state */
 extern int8 icw_pcf_new;                                /* CS2: new pdf */
 extern int8 icw_pcf_mod;                                /* CS2: modified pdf flag */
 extern pthread_mutex_t icw_lock;                        /* CS2: ICW update lock */
@@ -1946,11 +1945,6 @@ while (reason == 0) {                          /* Loop until halted */
                // ICW Input register ===> Eregs_Out 44, 45, 46, 47
                Get_ICW(abar);                       // update ICW inpur regs
             }
-
-            if (Efld == 0x44) {                     // NCP has read received byte
-               if (icw_pcf[0] == 0x07)              // TEMP PDF is now empty for next rx
-                  icw_pdf_reg = EMPTY;
-            }
             if (Efld == 0x50) {                     // Get INCWAR ?
                Eregs_Inp[0x50] = Eregs_Out[0x50];   // Load INCWAR as used by CA
             }
@@ -2040,8 +2034,26 @@ while (reason == 0) {                          /* Loop until halted */
                if (Efld == 0x44) {             // ICW SCF & PDF
                   icw_scf[tbar] = (Eregs_Out[0x44] >> 8) & 0x4E;   // Only Serv Req, DCD & Pgm Flag
                   icw_pdf[tbar] =  Eregs_Out[0x44] & 0x00FF;
-                  if (icw_pcf[0] != 0x07)               // TEMP
-                     icw_pdf_reg = FILLED;     // PDF is filled for tx
+		  if (Eregs_Out[0x44] & 0x8000) {
+		    icw_scf[tbar] &= 0x7f;
+		  }
+		  if (Eregs_Out[0x44] & 0x4000) {
+		    icw_scf[tbar] &= 0xbf;
+		  }
+		  if (Eregs_Out[0x44] & 0x2000) {
+		    icw_scf[tbar] &= 0xdf;
+		  }
+		  if (Eregs_Out[0x44] & 0x1000) {
+		    icw_scf[tbar] &= 0xef;
+		  }
+		  if (Eregs_Out[0x44] & 0x0800) {
+		    icw_scf[tbar] &= 0xf7;
+		  }
+		  if (Eregs_Out[0x44] & 0x0400) {
+		    icw_scf[tbar] &= 0xfb;
+		  }
+
+                  icw_scf[tbar] |= (Eregs_Out[0x44] >> 8) & 0x03;   
                }
                if (Efld == 0x45) {             // ICW LCD & PCF
                   icw_lcd[tbar] = (Eregs_Out[0x45] >> 4) & 0x0F;
