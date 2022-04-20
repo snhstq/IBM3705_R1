@@ -250,6 +250,8 @@ void *CS2_thread(void *arg) {
                break;
 
             case 0x6:                  // Receive info-inhibit data interrupt
+	      if ((svc_req_L2 == ON) || (lvl == 2))  // If L2 interrupt active ?
+                  break; 
                icw_pdf[t] = BLU_buf[j++];
                if (debug_reg & 0x40) { // Trace PCF state ?
                   fprintf(trace, "\n>>> CS2[%1X]: PCF = 6 entered, next PCF will be 7 \n\r", icw_pcf[t]);
@@ -264,7 +266,9 @@ void *CS2_thread(void *arg) {
                break;
 
             case 0x7:                  // Receive info-allow data interrupt
-               if ((icw_scf[t] & 0x40) == 0) {   // NCP has read pdf ?
+	      if ((svc_req_L2 == ON) || (lvl == 2))  // If L2 interrupt active ?
+		break;   
+	      if ((icw_scf[t] & 0x40) == 0) {   // NCP has read pdf ?
                   // Check for Eflag (for transparency x'470F7E' CRC + EFlag)
                   if ((BLU_buf[j - 2] == 0x47) &&    // CRC high
                       (BLU_buf[j - 1] == 0x0F) &&    // CRC low
@@ -300,6 +304,8 @@ void *CS2_thread(void *arg) {
                break;
 
             case 0x9:                  // Transmit normal
+	      if ((svc_req_L2 == ON) || (lvl == 2))  // If L2 interrupt active ?
+                  break;
                if ((icw_scf[t] & 0x40) == 0) {   // New char avail to xmit ?
                   if (debug_reg & 0x40) { // Trace PCF state ?
                      fprintf(trace, "\n>>> CS2[%1X]: PCF = 9 (re-)entered \n\r", icw_pcf[t]);
