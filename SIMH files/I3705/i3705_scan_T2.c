@@ -129,8 +129,6 @@ extern int32 cc;
 extern int Ireg_bit(int reg, int bit_mask);
 extern void wait();
 
-int8 icw_pdf_reg = EMPTY;              /* Status ICW PDF reg: ncp FILLED pdf for Tx */
-                                       /*                     ncp EMPTY pdf during Rx */
 int8 Rsp_buf     = EMPTY;              /* Status PIU response buf (FILLED/EMPTY) */
 int  Plen;                             /* Length of PIU response */
 int8 Eflg_rvcd;                        /* Eflag received */
@@ -252,8 +250,8 @@ void *CS2_thread(void *arg) {
                break;
 
             case 0x6:                  // Receive info-inhibit data interrupt
-               if ((svc_req_L2 == ON) || (lvl == 2))  // If L2 interrupt active ?
-                  break;                              // Loop till inactive...
+	      if ((svc_req_L2 == ON) || (lvl == 2))  // If L2 interrupt active ?
+                  break; 
                icw_pdf[t] = BLU_buf[j++];
                if (debug_reg & 0x40) { // Trace PCF state ?
                   fprintf(trace, "\n>>> CS2[%1X]: PCF = 6 entered, next PCF will be 7 \n\r", icw_pcf[t]);
@@ -263,16 +261,14 @@ void *CS2_thread(void *arg) {
                   break ;
                icw_scf[t] |= 0x40;     // Set norm char serv flag
                icw_scf[t] &= 0xFB;     // Reset 7E detected flag
-               icw_pdf_reg = FILLED;
                icw_pcf_new = 0x7;      // Goto PCF = 7...
                CS2_req_L2_int = ON;    // ...and issue a L2 int
                break;
 
             case 0x7:                  // Receive info-allow data interrupt
-               if ((svc_req_L2 == ON) || (lvl == 2))  // If L2 interrupt active ?
-                  break;                              // Loop till inactive...
-
-               if (icw_pdf_reg == EMPTY) {   // NCP has read pdf ?
+	      if ((svc_req_L2 == ON) || (lvl == 2))  // If L2 interrupt active ?
+		break;   
+	      if ((icw_scf[t] & 0x40) == 0) {   // NCP has read pdf ?
                   // Check for Eflag (for transparency x'470F7E' CRC + EFlag)
                   if ((BLU_buf[j - 2] == 0x47) &&    // CRC high
                       (BLU_buf[j - 1] == 0x0F) &&    // CRC low
@@ -290,7 +286,6 @@ void *CS2_thread(void *arg) {
                      icw_pcf_new = 0x6;      // Go back to PCF = 6...
                      CS2_req_L2_int = ON;    // Issue a L2 interrupt
                   } else {
-                     icw_pdf_reg = FILLED;   // Signal NCP to read pdf.
                      icw_scf[t] |= 0x40;     // Set norm char serv flag
                      icw_pcf_new = 0x7;      // Stay in PCF = 7...
                      CS2_req_L2_int = ON;    // Issue a L2 interrupt
@@ -309,16 +304,15 @@ void *CS2_thread(void *arg) {
                break;
 
             case 0x9:                  // Transmit normal
-               if ((svc_req_L2 == ON) || (lvl == 2))  // If L2 interrupt active ?
+	      if ((svc_req_L2 == ON) || (lvl == 2))  // If L2 interrupt active ?
                   break;
-               if (icw_pdf_reg == FILLED) {   // New char avail to xmit ?
+               if ((icw_scf[t] & 0x40) == 0) {   // New char avail to xmit ?
                   if (debug_reg & 0x40) { // Trace PCF state ?
                      fprintf(trace, "\n>>> CS2[%1X]: PCF = 9 (re-)entered \n\r", icw_pcf[t]);
                      fprintf(trace, "\n>>> CS2[%1X]: Transmitting PDF = *** %02X ***, j = %d \n\r", icw_pcf[t], icw_pdf[t], j);
                   }
                   BLU_buf[j++] = icw_pdf[t];
                   // Next byte please...
-                  icw_pdf_reg = EMPTY; // Ask NCP for next byte
                   icw_scf[t] |= 0x40;  // Set norm char serv flag
                   icw_pcf_new = 0x9;   // Stay in PCF = 9...
                   CS2_req_L2_int = ON; // Issue a L2 interrupt
